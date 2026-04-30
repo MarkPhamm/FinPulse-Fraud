@@ -13,7 +13,8 @@ Makefile                    # up / down / logs / smoke / nuke
 scripts/smoke.sh            # HDFS round-trip -> Kafka produce/consume -> Spark->HDFS job -> Airflow DAG
 jobs/smoke_spark.py         # PySpark word-count read from hdfs://
 airflow/dags/smoke_dag.py   # Trivial DAG used by `make smoke-airflow`
-data/                       # Source datasets (*.csv.gz / *.json.gz) + generate_data.py
+data/                       # Source datasets (*.csv.gz / *.json.gz)
+scripts/generate_data.py        # One-shot regenerator for data/*.gz
 docs/scenario.md            # Project brief
 ```
 
@@ -79,7 +80,9 @@ natively, so no manual `gunzip` is needed.
 | `customer-profiles.json.gz`   | 2.8 MB | 100,000   |
 | `fraud-reports.json.gz`       | 284 KB | 15,000    |
 | `merchant-directory.csv.gz`   | 143 KB | 10,000    |
-| `generate_data.py`            | 14 KB  | regenerator script |
+
+To regenerate the dataset from scratch (seed `2041`, deterministic):
+`python3 scripts/generate_data.py` — overwrites `data/*.gz` in place.
 
 ## Caveats / known follow-ups
 
@@ -90,4 +93,4 @@ natively, so no manual `gunzip` is needed.
    if startup time matters.
 2. **`data/*.gz` is not gitignored** but `transactions.csv.gz` (24 MB) is past
    GitHub's recommended file size. Decide whether to commit it or rely on
-   `generate_data.py` / re-download.
+   `scripts/generate_data.py` / re-download.

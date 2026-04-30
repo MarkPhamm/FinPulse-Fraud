@@ -7,7 +7,7 @@ Output goes to data/preview/, one file per input:
   *.csv.gz   -> first 100 rows + header        (transactions.csv, etc.)
   *.json.gz  -> first 50 records, pretty array (customer-profiles.json, etc.)
 
-Run from repo root:  python3 src/preview_data.py
+Run from repo root:  python3 scripts/preview_data.py
 """
 from __future__ import annotations
 

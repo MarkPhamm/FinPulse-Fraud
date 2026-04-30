@@ -12,7 +12,7 @@ import os
 from datetime import datetime, timedelta
 
 SEED_BASE = 2041
-OUTPUT_DIR = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
 
 NUM_CUSTOMERS = 100000
 CUSTOMER_IDS = [f"CUST-{i:06d}" for i in range(1, NUM_CUSTOMERS + 1)]
