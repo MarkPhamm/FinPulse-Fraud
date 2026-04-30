@@ -3,7 +3,7 @@ SHELL := /bin/bash
 # Detect compose command (compose v2 plugin vs legacy docker-compose)
 COMPOSE ?= docker compose
 
-.PHONY: help env up up-core up-bi up-stream down stop logs ps smoke smoke-all smoke-hdfs smoke-kafka smoke-spark smoke-airflow smoke-pinot smoke-flink nuke
+.PHONY: help env up up-core up-bi up-stream down stop logs ps smoke smoke-hdfs smoke-kafka smoke-spark smoke-airflow smoke-pinot smoke-flink nuke
 
 help:
 	@echo "Targets:"
@@ -17,8 +17,7 @@ help:
 	@echo "  nuke          Stop and DELETE all volumes (HDFS, Kafka, Postgres, Pinot, Superset, Flink data)"
 	@echo "  logs s=<svc>  Tail logs for one service, e.g. 'make logs s=namenode'"
 	@echo "  ps            Show running services"
-	@echo "  smoke         Core smoke: HDFS + Kafka + Spark only"
-	@echo "  smoke-all     Every smoke check: core + Airflow + Pinot + Flink"
+	@echo "  smoke         Run every smoke check (HDFS / Kafka / Spark / Airflow / Pinot / Flink)"
 	@echo "  smoke-hdfs    HDFS put/get round-trip"
 	@echo "  smoke-kafka   Produce + consume on a test topic"
 	@echo "  smoke-spark   Submit a tiny PySpark job that reads HDFS"
@@ -54,14 +53,7 @@ ps:
 logs:
 	$(COMPOSE) logs -f --tail=200 $(s)
 
-smoke: smoke-hdfs smoke-kafka smoke-spark
-	@echo ""
-	@echo "============================================"
-	@echo "  Core smoke passed (HDFS / Kafka / Spark)."
-	@echo "  Run 'make smoke-all' to also cover Airflow / Pinot / Flink."
-	@echo "============================================"
-
-smoke-all: smoke-hdfs smoke-kafka smoke-spark smoke-airflow smoke-pinot smoke-flink
+smoke: smoke-hdfs smoke-kafka smoke-spark smoke-airflow smoke-pinot smoke-flink
 	@echo ""
 	@echo "============================================"
 	@echo "  All smoke checks passed"
