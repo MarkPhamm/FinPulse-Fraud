@@ -1,0 +1,8 @@
+# Extra Python deps installed into the Superset image at container start.
+# The official Superset entrypoint (/app/docker/docker-bootstrap.sh) pip-installs
+# anything found at /app/docker/requirements-local.txt before booting the app.
+# Bind-mounting this file there is the supported way to add SQLAlchemy drivers
+# without baking a custom Dockerfile.
+
+# Driver for connecting Superset -> Apache Pinot.
+pinotdb

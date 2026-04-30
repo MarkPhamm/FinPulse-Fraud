@@ -93,8 +93,10 @@ airflow_smoke() {
     set -e
     airflow dags unpause smoke_dag >/dev/null
     airflow dags trigger smoke_dag >/dev/null
+    # `airflow dags list-runs --output plain` columns:
+    # 1=dag_id  2=run_id  3=state  4=execution_date  5=start_date  6=end_date
     for i in $(seq 1 30); do
-      state=$(airflow dags list-runs -d smoke_dag --output plain 2>/dev/null | awk "NR==2 {print \$4}")
+      state=$(airflow dags list-runs -d smoke_dag --output plain 2>/dev/null | awk "NR==2 {print \$3}")
       if [ "$state" = "success" ]; then echo "success"; exit 0; fi
       if [ "$state" = "failed" ];  then echo "failed";  exit 1; fi
       sleep 2
@@ -105,11 +107,55 @@ airflow_smoke() {
 }
 
 # ----------------------------------------------------------------------------
+pinot_smoke() {
+  step "Pinot: controller + broker /health, cluster registration"
+
+  # Hit /health on both. Curl from inside the controller container so we
+  # don't depend on the host port mapping being up (the in-network names
+  # are stable regardless of port remaps).
+  $COMPOSE exec -T pinot-controller bash -c '
+    set -e
+    curl -fsS http://pinot-controller:9000/health | grep -q OK
+    curl -fsS http://pinot-broker:8099/health   | grep -q OK
+  ' >/dev/null || die "Pinot /health endpoints not OK"
+  ok "Pinot controller + broker healthy"
+
+  # Confirm the broker and server have actually registered with the cluster
+  # (this catches misconfigured -zkAddress / clusterName / -*Host flags).
+  out=$($COMPOSE exec -T pinot-controller \
+      curl -fsS http://pinot-controller:9000/instances 2>/dev/null)
+  echo "$out" | grep -q 'Broker_pinot-broker_8099' || die "broker not registered: $out"
+  echo "$out" | grep -q 'Server_pinot-server_8098' || die "server not registered: $out"
+  ok "Pinot broker + server registered with controller"
+}
+
+# ----------------------------------------------------------------------------
+flink_smoke() {
+  step "Flink: jobmanager /overview + taskmanager registration"
+
+  # Hit /overview from inside the jobmanager container — same pattern as the
+  # pinot smoke check, so we don't depend on host port mapping being up.
+  out=$($COMPOSE exec -T flink-jobmanager curl -fsS http://localhost:8081/overview 2>/dev/null) \
+      || die "jobmanager /overview not reachable"
+  echo "$out" | grep -q '"flink-version"' || die "jobmanager /overview unexpected payload: $out"
+  ok "Flink jobmanager healthy"
+
+  # Confirm at least 1 taskmanager has registered with the jobmanager. Catches
+  # misconfigured jobmanager.rpc.address / hostname mismatches.
+  tm_count=$($COMPOSE exec -T flink-jobmanager curl -fsS http://localhost:8081/overview 2>/dev/null \
+      | grep -oE '"taskmanagers":[0-9]+' | head -1 | cut -d: -f2)
+  test "${tm_count:-0}" -ge 1 || die "no taskmanagers registered (got: ${tm_count:-0})"
+  ok "Flink taskmanager registered (count=$tm_count)"
+}
+
+# ----------------------------------------------------------------------------
 case "${1:-all}" in
   hdfs)    hdfs_smoke ;;
   kafka)   kafka_smoke ;;
   spark)   spark_smoke ;;
   airflow) airflow_smoke ;;
+  pinot)   pinot_smoke ;;
+  flink)   flink_smoke ;;
   all)     hdfs_smoke; kafka_smoke; spark_smoke ;;
-  *)       echo "usage: $0 [hdfs|kafka|spark|airflow|all]"; exit 2 ;;
+  *)       echo "usage: $0 [hdfs|kafka|spark|airflow|pinot|flink|all]"; exit 2 ;;
 esac

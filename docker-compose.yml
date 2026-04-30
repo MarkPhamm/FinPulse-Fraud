@@ -19,6 +19,14 @@ volumes:
   hdfs-data-2:
   kafka-data:
   postgres-data:
+  # Pinot + Superset (analytics layer)
+  pinot-zk-data:
+  pinot-zk-datalog:
+  pinot-controller-data:
+  pinot-server-data:
+  superset-data:
+  # Flink (stream processing layer)
+  flink-data:
 
 # -----------------------------------------------------------------------------
 # Shared blocks
@@ -316,3 +324,269 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+
+  # ---------- Pinot ---------------------------------------------------------
+  # Apache Pinot is a real-time OLAP store. It can ingest from Kafka (real-time
+  # tables) and from HDFS Parquet (offline tables) and answer SQL queries in
+  # tens of milliseconds. We run the standard 3-component layout:
+  #   pinot-controller : cluster mgmt + REST API + UI
+  #   pinot-broker     : query routing
+  #   pinot-server     : segment storage + query execution
+  # Plus a dedicated Zookeeper because Pinot uses ZK for cluster state.
+  # (Kafka has migrated to KRaft and no longer needs ZK; this is a separate
+  # ZK instance that only Pinot talks to. Sharing a ZK across Pinot + Kafka
+  # is possible but couples lifecycles in ways that are awkward at this
+  # scale, so we run our own.)
+  pinot-zookeeper:
+    image: zookeeper:3.9
+    container_name: pinot-zookeeper
+    hostname: pinot-zookeeper
+    environment:
+      # Whitelist the `ruok` 4-letter word so the healthcheck below works.
+      # Default is restricted in 3.5+ for security; safe to enable in dev.
+      - ZOO_4LW_COMMANDS_WHITELIST=ruok,stat,conf
+    volumes:
+      - pinot-zk-data:/data
+      - pinot-zk-datalog:/datalog
+    networks: [finpulse]
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | nc -w 2 localhost 2181 | grep -q imok"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # apachepinot/pinot:1.2.0 is multi-arch (arm64 + amd64).
+  # Image entrypoint is bin/pinot-admin.sh; `command:` provides the subcommand
+  # + args. JAVA_OPTS keeps the JVM heap modest so all four Pinot containers
+  # together don't blow past a 16 GB Docker allocation.
+  pinot-controller:
+    image: apachepinot/pinot:1.2.0
+    container_name: pinot-controller
+    hostname: pinot-controller
+    command:
+      - StartController
+      - -zkAddress
+      - pinot-zookeeper:2181
+      - -clusterName
+      - finpulse
+      - -controllerHost
+      - pinot-controller
+      - -controllerPort
+      - "9000"
+      - -dataDir
+      - /var/pinot/controller/data
+    environment:
+      - JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC
+    ports:
+      # Pinot Controller defaults to 9000, which collides with the HDFS
+      # NameNode RPC port on the host. Remap host -> 9100 (same trick we
+      # already use for Kafdrop, host 9001 -> container 9000).
+      - "9100:9000"
+    volumes:
+      - pinot-controller-data:/var/pinot/controller/data
+    depends_on:
+      pinot-zookeeper:
+        condition: service_healthy
+    networks: [finpulse]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/health | grep -q OK"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+
+  pinot-broker:
+    image: apachepinot/pinot:1.2.0
+    container_name: pinot-broker
+    hostname: pinot-broker
+    command:
+      - StartBroker
+      - -zkAddress
+      - pinot-zookeeper:2181
+      - -clusterName
+      - finpulse
+      - -brokerHost
+      - pinot-broker
+      - -brokerPort
+      - "8099"
+    environment:
+      - JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC
+    ports:
+      - "8099:8099"   # Broker query API (used by Superset + smoke checks)
+    depends_on:
+      pinot-controller:
+        condition: service_healthy
+    networks: [finpulse]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8099/health | grep -q OK"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+
+  pinot-server:
+    image: apachepinot/pinot:1.2.0
+    container_name: pinot-server
+    hostname: pinot-server
+    command:
+      - StartServer
+      - -zkAddress
+      - pinot-zookeeper:2181
+      - -clusterName
+      - finpulse
+      - -serverHost
+      - pinot-server
+      - -serverPort
+      - "8098"
+      - -serverAdminPort
+      - "8097"
+      - -dataDir
+      - /var/pinot/server/data/index
+      - -segmentDir
+      - /var/pinot/server/data/segment
+    environment:
+      # Servers hold segment data in memory + execute queries; give them a
+      # bit more heap than controller/broker.
+      - JAVA_OPTS=-Xms512m -Xmx1g -XX:+UseG1GC
+    volumes:
+      - pinot-server-data:/var/pinot/server/data
+    # No host port — the broker is the only Pinot component external clients
+    # talk to. Server ports 8097/8098 are in-network only.
+    depends_on:
+      pinot-controller:
+        condition: service_healthy
+    networks: [finpulse]
+
+  # ---------- Superset ------------------------------------------------------
+  # Apache Superset is the BI / dashboard UI. It connects to Pinot via the
+  # `pinotdb` SQLAlchemy driver, which we install at container startup by
+  # bind-mounting requirements-local.txt at the path the official entrypoint
+  # already pip-installs from. This lets us avoid baking a custom Dockerfile.
+  #
+  # Two-container split mirrors the Airflow init/webserver pattern:
+  #   superset-init  : one-shot — db upgrade, create admin user, run init.
+  #   superset       : long-lived gunicorn web server.
+  #
+  # Metadata DB is SQLite on the `superset-data` named volume. Fine for a
+  # single-user class project; swap to Postgres if multi-user editing is
+  # ever needed (see superset_config.py for the URI to change).
+  # Superset 4.1.1 dropped /app/docker/{docker-init,docker-bootstrap}.sh from the
+  # published image (those scripts only exist in the upstream source repo). We
+  # bring our own minimal versions in docker/superset/ and bind-mount them.
+  superset-init:
+    image: apache/superset:4.1.1
+    container_name: superset-init
+    user: "root"      # need root to pip-install requirements-local.txt
+    command: ["/app/superset-init.sh"]
+    environment:
+      - SUPERSET_SECRET_KEY=dev-secret-change-me
+      - SUPERSET_LOAD_EXAMPLES=no
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin
+      - ADMIN_FIRSTNAME=Admin
+      - ADMIN_LASTNAME=User
+      - ADMIN_EMAIL=admin@finpulse.local
+    volumes:
+      - superset-data:/app/superset_home
+      - ./docker/superset/requirements-local.txt:/app/docker/requirements-local.txt:ro
+      - ./docker/superset/superset_config.py:/app/pythonpath/superset_config.py:ro
+      - ./docker/superset/superset-init.sh:/app/superset-init.sh:ro
+    networks: [finpulse]
+    restart: "no"
+
+  superset:
+    image: apache/superset:4.1.1
+    container_name: superset
+    user: "root"
+    command: ["/app/superset-bootstrap.sh"]
+    environment:
+      - SUPERSET_SECRET_KEY=dev-secret-change-me
+      - SUPERSET_LOAD_EXAMPLES=no
+    ports:
+      - "8088:8088"   # BI web UI
+    volumes:
+      - superset-data:/app/superset_home
+      - ./docker/superset/requirements-local.txt:/app/docker/requirements-local.txt:ro
+      - ./docker/superset/superset_config.py:/app/pythonpath/superset_config.py:ro
+      - ./docker/superset/superset-bootstrap.sh:/app/superset-bootstrap.sh:ro
+    depends_on:
+      superset-init:
+        condition: service_completed_successfully
+    networks: [finpulse]
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8088/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s   # gunicorn cold start + pip-install pinotdb on first run
+    restart: unless-stopped
+
+  # ---------- Flink --------------------------------------------------------
+  # Apache Flink — stream processor for the Kafka → Flink → Kafka layer
+  # (Step 8 in plan.md). Distinct from Spark Structured Streaming because
+  # Flink is event-time native, true-streaming (not micro-batch), and gives
+  # exactly-once via two-phase commit with Kafka. See
+  # docs/odsc/robinhood_infrastructure.md for the full rationale.
+  #
+  # Topology: 1 jobmanager + 1 taskmanager. The taskmanager exposes 4 slots
+  # so a keyed velocity window can run with parallelism > 1 without
+  # back-pressuring the source.
+  #
+  # Port note: Flink's UI defaults to 8081 — collides with Airflow web.
+  # Remap to host 8082, mirroring the Kafdrop (9001<-9000) and Pinot
+  # Controller (9100<-9000) port-collision precedents.
+  flink-jobmanager:
+    image: flink:1.19.1-scala_2.12-java11
+    container_name: flink-jobmanager
+    hostname: flink-jobmanager
+    command: jobmanager
+    environment:
+      # Multi-line env value: FLINK_PROPERTIES is appended to flink-conf.yaml
+      # by the image entrypoint. jobmanager.rpc.address must resolve from
+      # taskmanager containers, so use the docker hostname not localhost.
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        rest.address: flink-jobmanager
+        rest.bind-address: 0.0.0.0
+        execution.checkpointing.interval: 30000
+        state.backend: rocksdb
+        state.checkpoints.dir: file:///opt/flink/data/checkpoints
+        state.savepoints.dir: file:///opt/flink/data/savepoints
+    ports:
+      - "8082:8081"   # Flink web UI (8081 is Airflow's)
+    volumes:
+      - flink-data:/opt/flink/data
+      - ./src/consumer:/opt/flink/usrlib:ro    # job artifacts (Step 8)
+      - ./docker/hadoop-client:/opt/hadoop-conf:ro   # HDFS client config
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [finpulse]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/overview > /dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  flink-taskmanager:
+    image: flink:1.19.1-scala_2.12-java11
+    container_name: flink-taskmanager
+    hostname: flink-taskmanager
+    command: taskmanager
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.host: flink-taskmanager
+        taskmanager.numberOfTaskSlots: 4
+        state.backend: rocksdb
+        state.checkpoints.dir: file:///opt/flink/data/checkpoints
+        state.savepoints.dir: file:///opt/flink/data/savepoints
+    volumes:
+      - flink-data:/opt/flink/data
+      - ./src/consumer:/opt/flink/usrlib:ro
+      - ./docker/hadoop-client:/opt/hadoop-conf:ro
+    depends_on:
+      flink-jobmanager:
+        condition: service_healthy
+    networks: [finpulse]
