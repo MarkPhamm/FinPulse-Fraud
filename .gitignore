@@ -216,3 +216,20 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ---- Local infra ----
+.env
+airflow/logs/
+spark-events/
+spark-warehouse/
+*.crc
+.derby.log
+metastore_db/
+.tmp-finpulse-*
+
+# ---- Editor / OS ----
+.DS_Store
+.idea/
+.vscode/
+
+.claude/
