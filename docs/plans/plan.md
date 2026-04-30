@@ -2,33 +2,70 @@
 
 ## Context
 
-The infrastructure (HDFS + Spark + Kafka + Airflow on Docker) is up and the
-smoke job passes. The 5 source datasets (1M transactions, 100K customers,
-600K device sessions, 15K fraud reports, 10K merchants) are sitting in
-`data/` as gzipped CSV/JSON.
+The infrastructure is up and `make smoke && make smoke-airflow &&
+make smoke-pinot && make smoke-flink` all pass. The full local stack is:
 
-The class brief in [`docs/scenario.md`](docs/scenario.md) defines four stages
-(HDFS Lake → Spark Batch → Kafka Streaming → Airflow Orchestration) and
-seven business questions to answer. The rubric weights **feature
+- **HDFS** (1 NameNode + 2 DataNodes) — dim landing + Spark analytics outputs.
+- **Spark** (1 master + 2 workers) — batch consumer of Kafka `transactions`
+  + HDFS dim joins + Pinot offline-segment generation.
+- **Kafka** (single broker, KRaft) — source of truth for the transaction
+  fact stream. Three topics: `transactions`, `transactions-scored`,
+  `fraud-alerts`.
+- **Flink** (1 jobmanager + 1 taskmanager, 4 slots) — streaming consumer
+  of Kafka `transactions`, writes scored events back to Kafka.
+- **Pinot** (zookeeper + controller + broker + server) — OLAP serving
+  layer; will host the `transactions_scored` hybrid table (real-time
+  from Kafka + offline from HDFS).
+- **Superset** — BI front-end on Pinot via the `pinotdb` SQLAlchemy driver.
+- **Airflow** (LocalExecutor) — orchestrates the daily Spark batch DAG and
+  monitors the long-running Flink job.
+
+The 5 source datasets (1M transactions, 100K customers, 600K device
+sessions, 15K fraud reports, 10K merchants) are sitting in `data/` as
+gzipped CSV/JSON.
+
+The class brief in [`docs/scenario.md`](../scenario.md) defines four
+stages (HDFS Lake → Spark Batch → Kafka Streaming → Airflow Orchestration)
+and seven business questions to answer. The rubric weights **feature
 engineering depth, class-imbalance awareness, real-time architecture
 quality, and dollar-impact framing** — not pure accuracy.
 
-The goal of this plan is to turn that brief into 10 small, observable
-steps so each new concept (HDFS zones, Parquet partitioning, broadcast
-joins, watermarks, Kafka keys, Airflow sensors, etc.) lands one at a time.
-Every step ends with something runnable and a single command to verify it.
+This plan turns that brief into 12 small, observable steps so each new
+concept lands one at a time. Steps 1–8 + 11–12 implement the four
+stages; Steps 9–10 add a Pinot + Superset analytics-serving layer
+(per the Robinhood pattern in
+[`docs/odsc/robinhood_infrastructure.md`](../odsc/robinhood_infrastructure.md))
+that the brief doesn't strictly require but makes the real-time
+architecture credit easier to demonstrate. Every step ends with
+something runnable and a single command to verify it. The end-to-end
+shape lives in [`docs/plans/dataflow.md`](dataflow.md) — read that
+diagram before starting any step.
 
 **Conventions used throughout the steps:**
 
 - All HDFS paths use the cluster-internal scheme `hdfs://namenode:9000/...`.
   Three top-level zones: `/landing` (raw, immutable), `/curated` (Parquet,
   cleaned), `/analytics` (joined / feature-engineered, query-optimised).
-- All Spark jobs run as `spark-submit --master spark://spark-master:7077`
-  via `docker compose exec spark-master ...`. New jobs land in `jobs/`
-  next to the existing `smoke_spark.py`.
+  **Transactions are not in any of these zones** — they live in Kafka
+  topic `transactions` only.
+- Spark batch jobs run as `spark-submit --master spark://spark-master:7077`
+  via `docker compose exec spark-master ...`. The Kafka source connector
+  is not pre-baked, so any job that reads Kafka needs
+  `--packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1`. New
+  jobs land in `jobs/` next to the existing `smoke_spark.py`.
+- Flink streaming jobs run via `docker compose exec flink-jobmanager
+  flink run -d /opt/flink/usrlib/<artifact>` with `./src/consumer/`
+  bind-mounted at `/opt/flink/usrlib`. The Kafka connector ships with
+  the Flink image — no `--packages` needed.
+- Pinot tables are registered via `POST /schemas` and `POST /tables`
+  against `http://pinot-controller:9000` (or host port 9100). Schema +
+  tableconfig JSONs land under `utils/pinot/`.
+- Superset reads Pinot via SQLAlchemy URL
+  `pinot://pinot-broker:8099/query/sql?controller=http://pinot-controller:9000`.
 - Each step writes its outputs at known paths so the next step can read
-  them; if you re-run the whole pipeline from scratch, just delete the
-  `/curated` and `/analytics` dirs first.
+  them; if you re-run the whole pipeline from scratch,
+  `make nuke && make up` wipes all named volumes (HDFS / Kafka / Pinot
+  segments / Superset metadata / Flink checkpoints / Postgres).
 
 ---
 
