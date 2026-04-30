@@ -1,0 +1,101 @@
+session_id,txn_id,device_type,os,browser,ip_country,ip_city,is_vpn,is_known_device,login_attempt_count
+DSESS-0000001,TXN-0583387,mobile,Android,Chrome,DE,San Francisco,false,true,1
+DSESS-0000002,TXN-0765238,mobile,macOS,Chrome,DE,Dallas,false,true,2
+DSESS-0000003,TXN-0963801,mobile,Android,Chrome,US,Miami,false,true,3
+DSESS-0000004,TXN-0569744,desktop,iOS,Safari,CA,Moscow,false,true,1
+DSESS-0000005,TXN-0671265,desktop,Windows,Firefox,CA,Vancouver,false,true,1
+DSESS-0000006,TXN-0650771,mobile,Android,Safari,US,San Francisco,false,true,2
+DSESS-0000007,TXN-0380404,mobile,iOS,Chrome,IN,Dallas,true,true,1
+DSESS-0000008,TXN-0016651,desktop,macOS,Chrome,UK,Berlin,false,true,1
+DSESS-0000009,TXN-0419369,mobile,Android,Samsung_Internet,CA,New York,false,true,3
+DSESS-0000010,TXN-0837498,tablet,Android,Safari,CA,New York,false,true,2
+DSESS-0000011,TXN-0294395,mobile,Windows,Chrome,US,Dallas,false,true,1
+DSESS-0000012,TXN-0470853,desktop,iOS,Safari,MX,London,true,false,1
+DSESS-0000013,TXN-0897471,mobile,Android,Samsung_Internet,FR,Sao Paulo,true,true,1
+DSESS-0000014,TXN-0106602,mobile,macOS,Firefox,US,San Francisco,false,true,1
+DSESS-0000015,TXN-0370244,desktop,Windows,Samsung_Internet,DE,Sydney,false,true,2
+DSESS-0000016,TXN-0651731,desktop,Android,Safari,MX,London,false,true,1
+DSESS-0000017,TXN-0423538,mobile,Android,Safari,FR,Vancouver,false,true,1
+DSESS-0000018,TXN-0468035,mobile,Windows,Safari,UK,Mumbai,false,true,2
+DSESS-0000019,TXN-0368284,mobile,Windows,Chrome,MX,Houston,false,true,1
+DSESS-0000020,TXN-0678760,tablet,iOS,Firefox,US,Los Angeles,false,true,3
+DSESS-0000021,TXN-0814594,mobile,iOS,Chrome,US,Manchester,false,true,3
+DSESS-0000022,TXN-0582452,mobile,macOS,Firefox,DE,Manchester,false,true,2
+DSESS-0000023,TXN-0607807,mobile,Windows,Samsung_Internet,US,Toronto,false,true,1
+DSESS-0000024,TXN-0597521,desktop,Windows,Safari,DE,Sydney,false,true,1
+DSESS-0000025,TXN-0924696,desktop,Windows,Edge,FR,Mumbai,true,true,1
+DSESS-0000026,TXN-0638497,desktop,macOS,Chrome,US,Toronto,false,true,1
+DSESS-0000027,TXN-0953465,mobile,macOS,Chrome,US,San Francisco,false,true,1
+DSESS-0000028,TXN-0989795,desktop,iOS,Firefox,US,Paris,false,true,1
+DSESS-0000029,TXN-0190346,mobile,Android,Firefox,US,Houston,false,true,1
+DSESS-0000030,TXN-0710902,mobile,macOS,Safari,RU,Tokyo,false,true,2
+DSESS-0000031,TXN-0306951,desktop,Android,Safari,US,Toronto,false,true,2
+DSESS-0000032,TXN-0596257,tablet,Android,Samsung_Internet,US,Moscow,false,true,1
+DSESS-0000033,TXN-0581202,tablet,Android,Safari,DE,Mumbai,false,true,2
+DSESS-0000034,TXN-0673883,desktop,Android,Chrome,US,London,false,true,2
+DSESS-0000035,TXN-0239157,tablet,macOS,Safari,US,Toronto,false,true,1
+DSESS-0000036,TXN-0685633,desktop,iOS,Opera,US,Tokyo,false,true,1
+DSESS-0000037,TXN-0029312,desktop,macOS,Chrome,US,Dallas,false,true,1
+DSESS-0000038,TXN-0295633,mobile,Windows,Safari,IN,London,false,true,1
+DSESS-0000039,TXN-0749038,desktop,Android,Chrome,US,Paris,false,true,3
+DSESS-0000040,TXN-0005920,mobile,Android,Firefox,US,Chicago,false,true,3
+DSESS-0000041,TXN-0095612,mobile,macOS,Firefox,US,Chicago,true,true,2
+DSESS-0000042,TXN-0539949,mobile,Linux,Edge,US,Dallas,false,false,2
+DSESS-0000043,TXN-0052362,desktop,iOS,Edge,US,Los Angeles,false,true,1
+DSESS-0000044,TXN-0248377,desktop,Android,Chrome,IN,London,false,true,1
+DSESS-0000045,TXN-0068269,desktop,macOS,Safari,IN,Houston,false,true,1
+DSESS-0000046,TXN-0898855,tablet,Windows,Chrome,DE,Lagos,false,false,2
+DSESS-0000047,TXN-0577458,mobile,Windows,Edge,CA,Miami,false,true,2
+DSESS-0000048,TXN-0753961,mobile,Windows,Chrome,US,Paris,false,true,1
+DSESS-0000049,TXN-0578735,desktop,Android,Opera,RU,Dallas,false,true,1
+DSESS-0000050,TXN-0031373,mobile,Windows,Chrome,US,Miami,false,true,1
+DSESS-0000051,TXN-0985258,tablet,Android,Safari,US,Los Angeles,false,true,1
+DSESS-0000052,TXN-0128475,mobile,macOS,Safari,US,Vancouver,false,true,2
+DSESS-0000053,TXN-0352677,mobile,iOS,Edge,FR,Mexico City,false,true,1
+DSESS-0000054,TXN-0046206,mobile,Android,Chrome,IN,Sydney,true,true,1
+DSESS-0000055,TXN-0828268,desktop,macOS,Safari,US,Paris,false,false,1
+DSESS-0000056,TXN-0552382,desktop,Windows,Firefox,DE,Sydney,false,true,1
+DSESS-0000057,TXN-0318667,desktop,Windows,Chrome,CA,New York,false,true,3
+DSESS-0000058,TXN-0825362,desktop,Android,Chrome,MX,Tokyo,false,true,2
+DSESS-0000059,TXN-0565769,desktop,Windows,Safari,IN,San Francisco,false,true,1
+DSESS-0000060,TXN-0532862,mobile,iOS,Chrome,US,Vancouver,false,false,1
+DSESS-0000061,TXN-0384288,mobile,Android,Chrome,FR,Sao Paulo,false,true,1
+DSESS-0000062,TXN-0013346,mobile,macOS,Safari,US,Chicago,false,true,1
+DSESS-0000063,TXN-0676627,mobile,Windows,Safari,DE,Toronto,false,true,1
+DSESS-0000064,TXN-0300601,mobile,Windows,Safari,US,Moscow,false,true,2
+DSESS-0000065,TXN-0621122,mobile,macOS,Edge,US,Moscow,false,true,1
+DSESS-0000066,TXN-0804921,mobile,macOS,Chrome,DE,Lagos,false,true,1
+DSESS-0000067,TXN-0207201,mobile,Windows,Chrome,DE,Vancouver,false,true,1
+DSESS-0000068,TXN-0656788,tablet,macOS,Chrome,UK,New York,false,true,1
+DSESS-0000069,TXN-0218610,mobile,iOS,Safari,CA,Dallas,false,true,1
+DSESS-0000070,TXN-0270139,tablet,Android,Edge,DE,Sao Paulo,false,true,1
+DSESS-0000071,TXN-0274621,mobile,Windows,Samsung_Internet,UK,Sydney,false,true,1
+DSESS-0000072,TXN-0309712,desktop,Android,Safari,US,Houston,false,false,1
+DSESS-0000073,TXN-0559933,desktop,Android,Safari,US,New York,false,true,2
+DSESS-0000074,TXN-0216324,mobile,Android,Safari,CA,Berlin,false,true,1
+DSESS-0000075,TXN-0618601,desktop,Android,Chrome,IN,San Francisco,false,true,1
+DSESS-0000076,TXN-0579134,desktop,iOS,Edge,CA,Manchester,false,true,1
+DSESS-0000077,TXN-0128324,desktop,Android,Samsung_Internet,US,New York,false,true,1
+DSESS-0000078,TXN-0311629,desktop,Linux,Chrome,UK,London,false,true,1
+DSESS-0000079,TXN-0558023,desktop,iOS,Safari,FR,New York,false,true,3
+DSESS-0000080,TXN-0700957,mobile,Android,Chrome,US,Vancouver,false,true,2
+DSESS-0000081,TXN-0684530,desktop,Windows,Safari,UK,Tokyo,false,true,1
+DSESS-0000082,TXN-0218695,mobile,Windows,Chrome,US,Dallas,false,true,1
+DSESS-0000083,TXN-0752552,mobile,Android,Edge,BR,Lagos,false,true,2
+DSESS-0000084,TXN-0680433,mobile,iOS,Chrome,US,London,false,true,1
+DSESS-0000085,TXN-0427364,tablet,iOS,Firefox,US,Manchester,false,true,1
+DSESS-0000086,TXN-0535305,tablet,macOS,Chrome,US,Tokyo,false,true,2
+DSESS-0000087,TXN-0670590,mobile,Android,Chrome,US,Toronto,true,true,1
+DSESS-0000088,TXN-0255959,desktop,iOS,Chrome,US,Paris,false,true,2
+DSESS-0000089,TXN-0306787,tablet,Windows,Chrome,US,San Francisco,false,true,1
+DSESS-0000090,TXN-0046497,mobile,Android,Edge,UK,Vancouver,false,true,1
+DSESS-0000091,TXN-0431038,desktop,Linux,Safari,UK,Moscow,false,true,3
+DSESS-0000092,TXN-0696333,mobile,iOS,Chrome,US,Los Angeles,false,true,1
+DSESS-0000093,TXN-0428790,tablet,iOS,Edge,US,Dallas,false,true,2
+DSESS-0000094,TXN-0123955,mobile,Windows,Chrome,US,Sao Paulo,false,true,1
+DSESS-0000095,TXN-0168763,desktop,macOS,Chrome,US,San Francisco,false,true,3
+DSESS-0000096,TXN-0589169,mobile,macOS,Chrome,US,New York,false,true,1
+DSESS-0000097,TXN-0806302,desktop,Windows,Safari,CA,Berlin,true,true,1
+DSESS-0000098,TXN-0771939,tablet,Android,Edge,US,Sydney,false,false,2
+DSESS-0000099,TXN-0935965,desktop,Windows,Chrome,US,Manchester,false,true,2
+DSESS-0000100,TXN-0264723,mobile,macOS,Safari,US,Mexico City,false,true,1

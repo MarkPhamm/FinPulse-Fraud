@@ -1,0 +1,770 @@
+[
+  {
+    "customer_id": "CUST-000001",
+    "card_id": "CARD-000001",
+    "age": 57,
+    "income_bracket": "high",
+    "account_age_months": 105,
+    "avg_monthly_spend": 3036.58,
+    "home_country": "US",
+    "typical_categories": [
+      "healthcare",
+      "restaurant"
+    ],
+    "credit_limit": 26073
+  },
+  {
+    "customer_id": "CUST-000002",
+    "card_id": "CARD-000002",
+    "age": 33,
+    "income_bracket": "medium",
+    "account_age_months": 74,
+    "avg_monthly_spend": 1628.49,
+    "home_country": "US",
+    "typical_categories": [
+      "money_transfer",
+      "jewelry",
+      "online_marketplace",
+      "healthcare",
+      "subscription_service"
+    ],
+    "credit_limit": 11230
+  },
+  {
+    "customer_id": "CUST-000003",
+    "card_id": "CARD-000003",
+    "age": 56,
+    "income_bracket": "very_high",
+    "account_age_months": 113,
+    "avg_monthly_spend": 10118.84,
+    "home_country": "MX",
+    "typical_categories": [
+      "online_marketplace",
+      "electronics",
+      "healthcare"
+    ],
+    "credit_limit": 49676
+  },
+  {
+    "customer_id": "CUST-000004",
+    "card_id": "CARD-000004",
+    "age": 47,
+    "income_bracket": "high",
+    "account_age_months": 24,
+    "avg_monthly_spend": 4819.68,
+    "home_country": "CA",
+    "typical_categories": [
+      "electronics",
+      "retail",
+      "luxury_goods",
+      "gas_station"
+    ],
+    "credit_limit": 23185
+  },
+  {
+    "customer_id": "CUST-000005",
+    "card_id": "CARD-000005",
+    "age": 19,
+    "income_bracket": "low",
+    "account_age_months": 108,
+    "avg_monthly_spend": 370.78,
+    "home_country": "UK",
+    "typical_categories": [
+      "online_marketplace",
+      "grocery",
+      "money_transfer"
+    ],
+    "credit_limit": 4744
+  },
+  {
+    "customer_id": "CUST-000006",
+    "card_id": "CARD-000006",
+    "age": 62,
+    "income_bracket": "low",
+    "account_age_months": 34,
+    "avg_monthly_spend": 859.99,
+    "home_country": "DE",
+    "typical_categories": [
+      "gambling",
+      "luxury_goods",
+      "entertainment",
+      "gas_station"
+    ],
+    "credit_limit": 3630
+  },
+  {
+    "customer_id": "CUST-000007",
+    "card_id": "CARD-000007",
+    "age": 79,
+    "income_bracket": "high",
+    "account_age_months": 112,
+    "avg_monthly_spend": 9188.25,
+    "home_country": "US",
+    "typical_categories": [
+      "healthcare",
+      "grocery",
+      "online_marketplace"
+    ],
+    "credit_limit": 27110
+  },
+  {
+    "customer_id": "CUST-000008",
+    "card_id": "CARD-000008",
+    "age": 80,
+    "income_bracket": "medium",
+    "account_age_months": 56,
+    "avg_monthly_spend": 3221.57,
+    "home_country": "JP",
+    "typical_categories": [
+      "digital_goods",
+      "retail",
+      "luxury_goods",
+      "grocery"
+    ],
+    "credit_limit": 8064
+  },
+  {
+    "customer_id": "CUST-000009",
+    "card_id": "CARD-000009",
+    "age": 72,
+    "income_bracket": "high",
+    "account_age_months": 26,
+    "avg_monthly_spend": 6380.47,
+    "home_country": "US",
+    "typical_categories": [
+      "jewelry",
+      "luxury_goods",
+      "subscription_service"
+    ],
+    "credit_limit": 17475
+  },
+  {
+    "customer_id": "CUST-000010",
+    "card_id": "CARD-000010",
+    "age": 85,
+    "income_bracket": "very_high",
+    "account_age_months": 26,
+    "avg_monthly_spend": 28437.38,
+    "home_country": "JP",
+    "typical_categories": [
+      "restaurant",
+      "luxury_goods",
+      "gambling"
+    ],
+    "credit_limit": 76551
+  },
+  {
+    "customer_id": "CUST-000011",
+    "card_id": "CARD-000011",
+    "age": 69,
+    "income_bracket": "medium",
+    "account_age_months": 16,
+    "avg_monthly_spend": 1227.61,
+    "home_country": "US",
+    "typical_categories": [
+      "entertainment",
+      "jewelry",
+      "gambling"
+    ],
+    "credit_limit": 11556
+  },
+  {
+    "customer_id": "CUST-000012",
+    "card_id": "CARD-000012",
+    "age": 85,
+    "income_bracket": "low",
+    "account_age_months": 40,
+    "avg_monthly_spend": 304.17,
+    "home_country": "US",
+    "typical_categories": [
+      "grocery",
+      "luxury_goods",
+      "electronics",
+      "healthcare"
+    ],
+    "credit_limit": 1907
+  },
+  {
+    "customer_id": "CUST-000013",
+    "card_id": "CARD-000013",
+    "age": 53,
+    "income_bracket": "medium",
+    "account_age_months": 20,
+    "avg_monthly_spend": 2981.95,
+    "home_country": "CA",
+    "typical_categories": [
+      "healthcare",
+      "grocery",
+      "entertainment",
+      "travel"
+    ],
+    "credit_limit": 12629
+  },
+  {
+    "customer_id": "CUST-000014",
+    "card_id": "CARD-000014",
+    "age": 67,
+    "income_bracket": "medium",
+    "account_age_months": 33,
+    "avg_monthly_spend": 993.87,
+    "home_country": "US",
+    "typical_categories": [
+      "digital_goods",
+      "restaurant",
+      "gambling",
+      "online_marketplace"
+    ],
+    "credit_limit": 5435
+  },
+  {
+    "customer_id": "CUST-000015",
+    "card_id": "CARD-000015",
+    "age": 71,
+    "income_bracket": "high",
+    "account_age_months": 102,
+    "avg_monthly_spend": 4709.84,
+    "home_country": "JP",
+    "typical_categories": [
+      "travel",
+      "jewelry",
+      "restaurant"
+    ],
+    "credit_limit": 12671
+  },
+  {
+    "customer_id": "CUST-000016",
+    "card_id": "CARD-000016",
+    "age": 43,
+    "income_bracket": "medium",
+    "account_age_months": 102,
+    "avg_monthly_spend": 1307.74,
+    "home_country": "US",
+    "typical_categories": [
+      "money_transfer",
+      "entertainment",
+      "electronics"
+    ],
+    "credit_limit": 10552
+  },
+  {
+    "customer_id": "CUST-000017",
+    "card_id": "CARD-000017",
+    "age": 85,
+    "income_bracket": "low",
+    "account_age_months": 77,
+    "avg_monthly_spend": 747.2,
+    "home_country": "US",
+    "typical_categories": [
+      "entertainment",
+      "jewelry"
+    ],
+    "credit_limit": 4754
+  },
+  {
+    "customer_id": "CUST-000018",
+    "card_id": "CARD-000018",
+    "age": 45,
+    "income_bracket": "low",
+    "account_age_months": 110,
+    "avg_monthly_spend": 388.53,
+    "home_country": "UK",
+    "typical_categories": [
+      "grocery",
+      "online_marketplace",
+      "travel",
+      "healthcare"
+    ],
+    "credit_limit": 2769
+  },
+  {
+    "customer_id": "CUST-000019",
+    "card_id": "CARD-000019",
+    "age": 36,
+    "income_bracket": "medium",
+    "account_age_months": 33,
+    "avg_monthly_spend": 1768.02,
+    "home_country": "JP",
+    "typical_categories": [
+      "healthcare",
+      "entertainment",
+      "money_transfer",
+      "online_marketplace",
+      "luxury_goods"
+    ],
+    "credit_limit": 8013
+  },
+  {
+    "customer_id": "CUST-000020",
+    "card_id": "CARD-000020",
+    "age": 27,
+    "income_bracket": "high",
+    "account_age_months": 3,
+    "avg_monthly_spend": 2463.91,
+    "home_country": "BR",
+    "typical_categories": [
+      "grocery",
+      "digital_goods",
+      "subscription_service",
+      "travel"
+    ],
+    "credit_limit": 31800
+  },
+  {
+    "customer_id": "CUST-000021",
+    "card_id": "CARD-000021",
+    "age": 27,
+    "income_bracket": "high",
+    "account_age_months": 84,
+    "avg_monthly_spend": 8477.85,
+    "home_country": "UK",
+    "typical_categories": [
+      "online_marketplace",
+      "gambling",
+      "gas_station",
+      "restaurant"
+    ],
+    "credit_limit": 46624
+  },
+  {
+    "customer_id": "CUST-000022",
+    "card_id": "CARD-000022",
+    "age": 42,
+    "income_bracket": "low",
+    "account_age_months": 31,
+    "avg_monthly_spend": 1187.8,
+    "home_country": "US",
+    "typical_categories": [
+      "luxury_goods",
+      "retail",
+      "gambling",
+      "money_transfer"
+    ],
+    "credit_limit": 3573
+  },
+  {
+    "customer_id": "CUST-000023",
+    "card_id": "CARD-000023",
+    "age": 51,
+    "income_bracket": "medium",
+    "account_age_months": 25,
+    "avg_monthly_spend": 3951.25,
+    "home_country": "DE",
+    "typical_categories": [
+      "grocery",
+      "gas_station",
+      "retail"
+    ],
+    "credit_limit": 10214
+  },
+  {
+    "customer_id": "CUST-000024",
+    "card_id": "CARD-000024",
+    "age": 83,
+    "income_bracket": "medium",
+    "account_age_months": 118,
+    "avg_monthly_spend": 1111.68,
+    "home_country": "US",
+    "typical_categories": [
+      "travel",
+      "gas_station"
+    ],
+    "credit_limit": 10107
+  },
+  {
+    "customer_id": "CUST-000025",
+    "card_id": "CARD-000025",
+    "age": 80,
+    "income_bracket": "low",
+    "account_age_months": 12,
+    "avg_monthly_spend": 619.73,
+    "home_country": "IN",
+    "typical_categories": [
+      "travel",
+      "subscription_service",
+      "money_transfer",
+      "jewelry"
+    ],
+    "credit_limit": 3982
+  },
+  {
+    "customer_id": "CUST-000026",
+    "card_id": "CARD-000026",
+    "age": 27,
+    "income_bracket": "low",
+    "account_age_months": 69,
+    "avg_monthly_spend": 376.15,
+    "home_country": "UK",
+    "typical_categories": [
+      "restaurant",
+      "electronics",
+      "gambling"
+    ],
+    "credit_limit": 4605
+  },
+  {
+    "customer_id": "CUST-000027",
+    "card_id": "CARD-000027",
+    "age": 62,
+    "income_bracket": "medium",
+    "account_age_months": 90,
+    "avg_monthly_spend": 3901.58,
+    "home_country": "US",
+    "typical_categories": [
+      "travel",
+      "subscription_service",
+      "online_marketplace",
+      "gambling",
+      "restaurant"
+    ],
+    "credit_limit": 8263
+  },
+  {
+    "customer_id": "CUST-000028",
+    "card_id": "CARD-000028",
+    "age": 85,
+    "income_bracket": "low",
+    "account_age_months": 45,
+    "avg_monthly_spend": 1414.13,
+    "home_country": "US",
+    "typical_categories": [
+      "money_transfer",
+      "restaurant",
+      "retail",
+      "digital_goods",
+      "luxury_goods"
+    ],
+    "credit_limit": 3132
+  },
+  {
+    "customer_id": "CUST-000029",
+    "card_id": "CARD-000029",
+    "age": 70,
+    "income_bracket": "medium",
+    "account_age_months": 26,
+    "avg_monthly_spend": 3407.79,
+    "home_country": "FR",
+    "typical_categories": [
+      "digital_goods",
+      "entertainment"
+    ],
+    "credit_limit": 9511
+  },
+  {
+    "customer_id": "CUST-000030",
+    "card_id": "CARD-000030",
+    "age": 33,
+    "income_bracket": "high",
+    "account_age_months": 82,
+    "avg_monthly_spend": 3752.97,
+    "home_country": "US",
+    "typical_categories": [
+      "money_transfer",
+      "travel",
+      "gas_station"
+    ],
+    "credit_limit": 30889
+  },
+  {
+    "customer_id": "CUST-000031",
+    "card_id": "CARD-000031",
+    "age": 57,
+    "income_bracket": "high",
+    "account_age_months": 53,
+    "avg_monthly_spend": 7437.39,
+    "home_country": "US",
+    "typical_categories": [
+      "jewelry",
+      "retail",
+      "luxury_goods",
+      "restaurant",
+      "healthcare"
+    ],
+    "credit_limit": 16791
+  },
+  {
+    "customer_id": "CUST-000032",
+    "card_id": "CARD-000032",
+    "age": 31,
+    "income_bracket": "low",
+    "account_age_months": 116,
+    "avg_monthly_spend": 1416.41,
+    "home_country": "FR",
+    "typical_categories": [
+      "electronics",
+      "gas_station",
+      "subscription_service",
+      "healthcare"
+    ],
+    "credit_limit": 3317
+  },
+  {
+    "customer_id": "CUST-000033",
+    "card_id": "CARD-000033",
+    "age": 19,
+    "income_bracket": "low",
+    "account_age_months": 28,
+    "avg_monthly_spend": 616.67,
+    "home_country": "CA",
+    "typical_categories": [
+      "jewelry",
+      "retail"
+    ],
+    "credit_limit": 3791
+  },
+  {
+    "customer_id": "CUST-000034",
+    "card_id": "CARD-000034",
+    "age": 62,
+    "income_bracket": "medium",
+    "account_age_months": 61,
+    "avg_monthly_spend": 2626.24,
+    "home_country": "US",
+    "typical_categories": [
+      "retail",
+      "travel",
+      "grocery"
+    ],
+    "credit_limit": 7143
+  },
+  {
+    "customer_id": "CUST-000035",
+    "card_id": "CARD-000035",
+    "age": 37,
+    "income_bracket": "medium",
+    "account_age_months": 76,
+    "avg_monthly_spend": 928.27,
+    "home_country": "FR",
+    "typical_categories": [
+      "subscription_service",
+      "restaurant",
+      "luxury_goods"
+    ],
+    "credit_limit": 5666
+  },
+  {
+    "customer_id": "CUST-000036",
+    "card_id": "CARD-000036",
+    "age": 55,
+    "income_bracket": "medium",
+    "account_age_months": 56,
+    "avg_monthly_spend": 2945.65,
+    "home_country": "US",
+    "typical_categories": [
+      "jewelry",
+      "subscription_service",
+      "entertainment",
+      "digital_goods",
+      "online_marketplace"
+    ],
+    "credit_limit": 3458
+  },
+  {
+    "customer_id": "CUST-000037",
+    "card_id": "CARD-000037",
+    "age": 61,
+    "income_bracket": "low",
+    "account_age_months": 84,
+    "avg_monthly_spend": 1409.79,
+    "home_country": "US",
+    "typical_categories": [
+      "luxury_goods",
+      "money_transfer"
+    ],
+    "credit_limit": 4540
+  },
+  {
+    "customer_id": "CUST-000038",
+    "card_id": "CARD-000038",
+    "age": 31,
+    "income_bracket": "medium",
+    "account_age_months": 99,
+    "avg_monthly_spend": 1699.11,
+    "home_country": "US",
+    "typical_categories": [
+      "gambling",
+      "electronics",
+      "grocery",
+      "healthcare",
+      "money_transfer"
+    ],
+    "credit_limit": 6593
+  },
+  {
+    "customer_id": "CUST-000039",
+    "card_id": "CARD-000039",
+    "age": 26,
+    "income_bracket": "low",
+    "account_age_months": 39,
+    "avg_monthly_spend": 1171.61,
+    "home_country": "AU",
+    "typical_categories": [
+      "money_transfer",
+      "travel"
+    ],
+    "credit_limit": 2288
+  },
+  {
+    "customer_id": "CUST-000040",
+    "card_id": "CARD-000040",
+    "age": 59,
+    "income_bracket": "low",
+    "account_age_months": 67,
+    "avg_monthly_spend": 206.55,
+    "home_country": "UK",
+    "typical_categories": [
+      "jewelry",
+      "online_marketplace",
+      "healthcare"
+    ],
+    "credit_limit": 3004
+  },
+  {
+    "customer_id": "CUST-000041",
+    "card_id": "CARD-000041",
+    "age": 46,
+    "income_bracket": "high",
+    "account_age_months": 98,
+    "avg_monthly_spend": 9893.18,
+    "home_country": "US",
+    "typical_categories": [
+      "digital_goods",
+      "electronics"
+    ],
+    "credit_limit": 22840
+  },
+  {
+    "customer_id": "CUST-000042",
+    "card_id": "CARD-000042",
+    "age": 69,
+    "income_bracket": "medium",
+    "account_age_months": 51,
+    "avg_monthly_spend": 2946.53,
+    "home_country": "JP",
+    "typical_categories": [
+      "grocery",
+      "subscription_service",
+      "gambling",
+      "digital_goods",
+      "electronics"
+    ],
+    "credit_limit": 6746
+  },
+  {
+    "customer_id": "CUST-000043",
+    "card_id": "CARD-000043",
+    "age": 78,
+    "income_bracket": "high",
+    "account_age_months": 86,
+    "avg_monthly_spend": 8121.22,
+    "home_country": "US",
+    "typical_categories": [
+      "travel",
+      "entertainment"
+    ],
+    "credit_limit": 43059
+  },
+  {
+    "customer_id": "CUST-000044",
+    "card_id": "CARD-000044",
+    "age": 21,
+    "income_bracket": "medium",
+    "account_age_months": 60,
+    "avg_monthly_spend": 3566.6,
+    "home_country": "BR",
+    "typical_categories": [
+      "gas_station",
+      "grocery"
+    ],
+    "credit_limit": 13758
+  },
+  {
+    "customer_id": "CUST-000045",
+    "card_id": "CARD-000045",
+    "age": 43,
+    "income_bracket": "low",
+    "account_age_months": 31,
+    "avg_monthly_spend": 1226.14,
+    "home_country": "US",
+    "typical_categories": [
+      "retail",
+      "travel"
+    ],
+    "credit_limit": 4409
+  },
+  {
+    "customer_id": "CUST-000046",
+    "card_id": "CARD-000046",
+    "age": 24,
+    "income_bracket": "low",
+    "account_age_months": 40,
+    "avg_monthly_spend": 899.94,
+    "home_country": "US",
+    "typical_categories": [
+      "jewelry",
+      "gas_station",
+      "online_marketplace"
+    ],
+    "credit_limit": 1937
+  },
+  {
+    "customer_id": "CUST-000047",
+    "card_id": "CARD-000047",
+    "age": 40,
+    "income_bracket": "medium",
+    "account_age_months": 16,
+    "avg_monthly_spend": 3564.64,
+    "home_country": "US",
+    "typical_categories": [
+      "online_marketplace",
+      "subscription_service"
+    ],
+    "credit_limit": 12544
+  },
+  {
+    "customer_id": "CUST-000048",
+    "card_id": "CARD-000048",
+    "age": 54,
+    "income_bracket": "high",
+    "account_age_months": 96,
+    "avg_monthly_spend": 7996.44,
+    "home_country": "US",
+    "typical_categories": [
+      "money_transfer",
+      "luxury_goods",
+      "subscription_service",
+      "gas_station",
+      "jewelry"
+    ],
+    "credit_limit": 23559
+  },
+  {
+    "customer_id": "CUST-000049",
+    "card_id": "CARD-000049",
+    "age": 67,
+    "income_bracket": "low",
+    "account_age_months": 113,
+    "avg_monthly_spend": 628.6,
+    "home_country": "US",
+    "typical_categories": [
+      "gambling",
+      "restaurant"
+    ],
+    "credit_limit": 2842
+  },
+  {
+    "customer_id": "CUST-000050",
+    "card_id": "CARD-000050",
+    "age": 70,
+    "income_bracket": "low",
+    "account_age_months": 33,
+    "avg_monthly_spend": 1234.15,
+    "home_country": "MX",
+    "typical_categories": [
+      "online_marketplace",
+      "grocery",
+      "gas_station",
+      "jewelry"
+    ],
+    "credit_limit": 4496
+  }
+]

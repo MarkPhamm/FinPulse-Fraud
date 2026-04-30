@@ -1,0 +1,452 @@
+[
+  {
+    "report_id": "FR-000001",
+    "txn_id": "TXN-0160793",
+    "timestamp": "2025-06-03T18:00:00",
+    "reported_by": "customer",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 2007.62,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000002",
+    "txn_id": "TXN-0522044",
+    "timestamp": "2025-01-02T15:00:00",
+    "reported_by": "customer",
+    "fraud_type": "account_takeover",
+    "amount_disputed": 1463.26,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000003",
+    "txn_id": "TXN-0060339",
+    "timestamp": "2025-06-06T07:00:00",
+    "reported_by": "bank",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 2828.35,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000004",
+    "txn_id": "TXN-0705095",
+    "timestamp": "2025-02-04T09:00:00",
+    "reported_by": "customer",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 2544.41,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000005",
+    "txn_id": "TXN-0808607",
+    "timestamp": "2025-02-17T05:00:00",
+    "reported_by": "customer",
+    "fraud_type": "counterfeit",
+    "amount_disputed": 588.76,
+    "resolution": "false_alarm"
+  },
+  {
+    "report_id": "FR-000006",
+    "txn_id": "TXN-0293653",
+    "timestamp": "2025-03-23T21:00:00",
+    "reported_by": "customer",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 4019.77,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000007",
+    "txn_id": "TXN-0121342",
+    "timestamp": "2025-04-10T00:00:00",
+    "reported_by": "merchant",
+    "fraud_type": "account_takeover",
+    "amount_disputed": 830.64,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000008",
+    "txn_id": "TXN-0374982",
+    "timestamp": "2025-04-12T13:00:00",
+    "reported_by": "bank",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 4713.44,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000009",
+    "txn_id": "TXN-0495144",
+    "timestamp": "2025-05-20T18:00:00",
+    "reported_by": "customer",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 4862.81,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000010",
+    "txn_id": "TXN-0166014",
+    "timestamp": "2025-05-26T01:00:00",
+    "reported_by": "bank",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 3526.97,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000011",
+    "txn_id": "TXN-0865477",
+    "timestamp": "2025-01-23T08:00:00",
+    "reported_by": "customer",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 1355.22,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000012",
+    "txn_id": "TXN-0286671",
+    "timestamp": "2025-02-17T20:00:00",
+    "reported_by": "customer",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 4335.17,
+    "resolution": "false_alarm"
+  },
+  {
+    "report_id": "FR-000013",
+    "txn_id": "TXN-0833167",
+    "timestamp": "2025-06-27T16:00:00",
+    "reported_by": "merchant",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 93.74,
+    "resolution": "false_alarm"
+  },
+  {
+    "report_id": "FR-000014",
+    "txn_id": "TXN-0878589",
+    "timestamp": "2025-01-13T11:00:00",
+    "reported_by": "bank",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 771.95,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000015",
+    "txn_id": "TXN-0610231",
+    "timestamp": "2025-06-03T12:00:00",
+    "reported_by": "bank",
+    "fraud_type": "account_takeover",
+    "amount_disputed": 3306.53,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000016",
+    "txn_id": "TXN-0818346",
+    "timestamp": "2025-06-27T16:00:00",
+    "reported_by": "customer",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 1396.5,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000017",
+    "txn_id": "TXN-0253172",
+    "timestamp": "2025-06-20T19:00:00",
+    "reported_by": "bank",
+    "fraud_type": "account_takeover",
+    "amount_disputed": 1737.26,
+    "resolution": "false_alarm"
+  },
+  {
+    "report_id": "FR-000018",
+    "txn_id": "TXN-0590393",
+    "timestamp": "2025-04-05T16:00:00",
+    "reported_by": "bank",
+    "fraud_type": "account_takeover",
+    "amount_disputed": 1007.77,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000019",
+    "txn_id": "TXN-0448563",
+    "timestamp": "2025-04-25T23:00:00",
+    "reported_by": "bank",
+    "fraud_type": "counterfeit",
+    "amount_disputed": 4436.58,
+    "resolution": "false_alarm"
+  },
+  {
+    "report_id": "FR-000020",
+    "txn_id": "TXN-0682284",
+    "timestamp": "2025-06-16T11:00:00",
+    "reported_by": "bank",
+    "fraud_type": "counterfeit",
+    "amount_disputed": 2066.58,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000021",
+    "txn_id": "TXN-0081414",
+    "timestamp": "2025-03-26T03:00:00",
+    "reported_by": "merchant",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 4973.11,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000022",
+    "txn_id": "TXN-0643538",
+    "timestamp": "2025-01-15T21:00:00",
+    "reported_by": "bank",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 452.36,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000023",
+    "txn_id": "TXN-0760035",
+    "timestamp": "2025-03-12T19:00:00",
+    "reported_by": "bank",
+    "fraud_type": "identity_theft",
+    "amount_disputed": 3030.84,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000024",
+    "txn_id": "TXN-0651070",
+    "timestamp": "2025-02-06T15:00:00",
+    "reported_by": "customer",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 3990.52,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000025",
+    "txn_id": "TXN-0892230",
+    "timestamp": "2025-03-20T09:00:00",
+    "reported_by": "bank",
+    "fraud_type": "account_takeover",
+    "amount_disputed": 1578.43,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000026",
+    "txn_id": "TXN-0760719",
+    "timestamp": "2025-01-05T17:00:00",
+    "reported_by": "merchant",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 4100.73,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000027",
+    "txn_id": "TXN-0801125",
+    "timestamp": "2025-01-01T00:00:00",
+    "reported_by": "bank",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 4398.98,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000028",
+    "txn_id": "TXN-0392813",
+    "timestamp": "2025-03-13T15:00:00",
+    "reported_by": "customer",
+    "fraud_type": "counterfeit",
+    "amount_disputed": 1986.68,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000029",
+    "txn_id": "TXN-0499489",
+    "timestamp": "2025-01-05T12:00:00",
+    "reported_by": "bank",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 4883.04,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000030",
+    "txn_id": "TXN-0813951",
+    "timestamp": "2025-05-05T00:00:00",
+    "reported_by": "merchant",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 2912.9,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000031",
+    "txn_id": "TXN-0296534",
+    "timestamp": "2025-04-01T12:00:00",
+    "reported_by": "bank",
+    "fraud_type": "counterfeit",
+    "amount_disputed": 4190.5,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000032",
+    "txn_id": "TXN-0504775",
+    "timestamp": "2025-02-04T13:00:00",
+    "reported_by": "bank",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 1935.39,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000033",
+    "txn_id": "TXN-0455246",
+    "timestamp": "2025-01-21T18:00:00",
+    "reported_by": "customer",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 3012.04,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000034",
+    "txn_id": "TXN-0152110",
+    "timestamp": "2025-02-16T17:00:00",
+    "reported_by": "bank",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 4649.02,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000035",
+    "txn_id": "TXN-0528129",
+    "timestamp": "2025-02-10T10:00:00",
+    "reported_by": "bank",
+    "fraud_type": "counterfeit",
+    "amount_disputed": 4881.66,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000036",
+    "txn_id": "TXN-0280268",
+    "timestamp": "2025-06-03T10:00:00",
+    "reported_by": "customer",
+    "fraud_type": "counterfeit",
+    "amount_disputed": 2092.86,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000037",
+    "txn_id": "TXN-0850147",
+    "timestamp": "2025-03-18T23:00:00",
+    "reported_by": "customer",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 3333.27,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000038",
+    "txn_id": "TXN-0868586",
+    "timestamp": "2025-06-23T01:00:00",
+    "reported_by": "customer",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 1494.85,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000039",
+    "txn_id": "TXN-0640936",
+    "timestamp": "2025-01-20T12:00:00",
+    "reported_by": "customer",
+    "fraud_type": "account_takeover",
+    "amount_disputed": 305.63,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000040",
+    "txn_id": "TXN-0842086",
+    "timestamp": "2025-03-17T04:00:00",
+    "reported_by": "bank",
+    "fraud_type": "account_takeover",
+    "amount_disputed": 2387.34,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000041",
+    "txn_id": "TXN-0900852",
+    "timestamp": "2025-06-19T13:00:00",
+    "reported_by": "customer",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 2795.62,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000042",
+    "txn_id": "TXN-0038736",
+    "timestamp": "2025-04-16T08:00:00",
+    "reported_by": "bank",
+    "fraud_type": "account_takeover",
+    "amount_disputed": 4154.44,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000043",
+    "txn_id": "TXN-0271128",
+    "timestamp": "2025-03-05T15:00:00",
+    "reported_by": "merchant",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 2287.19,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000044",
+    "txn_id": "TXN-0711570",
+    "timestamp": "2025-03-13T20:00:00",
+    "reported_by": "merchant",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 3214.9,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000045",
+    "txn_id": "TXN-0897625",
+    "timestamp": "2025-06-18T09:00:00",
+    "reported_by": "customer",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 1236.82,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000046",
+    "txn_id": "TXN-0237426",
+    "timestamp": "2025-04-30T13:00:00",
+    "reported_by": "customer",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 2022.94,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000047",
+    "txn_id": "TXN-0319453",
+    "timestamp": "2025-02-05T21:00:00",
+    "reported_by": "customer",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 2360.3,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000048",
+    "txn_id": "TXN-0314294",
+    "timestamp": "2025-01-01T20:00:00",
+    "reported_by": "customer",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 3567.0,
+    "resolution": "confirmed_fraud"
+  },
+  {
+    "report_id": "FR-000049",
+    "txn_id": "TXN-0562489",
+    "timestamp": "2025-04-10T07:00:00",
+    "reported_by": "bank",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 920.23,
+    "resolution": "false_alarm"
+  },
+  {
+    "report_id": "FR-000050",
+    "txn_id": "TXN-0955997",
+    "timestamp": "2025-05-11T22:00:00",
+    "reported_by": "customer",
+    "fraud_type": "card_not_present",
+    "amount_disputed": 551.03,
+    "resolution": "confirmed_fraud"
+  }
+]
