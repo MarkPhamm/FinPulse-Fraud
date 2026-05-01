@@ -14,7 +14,7 @@ plan.md              # End-to-end build plan, 10 small steps
 airflow/             # DAGs, plugins, task logs
 data/                # Source datasets (gzipped CSV / JSON)
 docker/              # Bind-mounted config for Hadoop, Spark, Superset, Flink
-docs/                # scenario.md (brief), services.md (per-container ref), dataflow.md
+docs/                # scenario.md (brief), infrastructure/ (per-container ref), plans/ (dataflow + plan)
 jobs/                # Spark jobs (batch curate / enrich on HDFS Parquet)
 notebooks/           # Analysis notebooks answering the 7 business questions
 scripts/             # Host-side helpers (smoke.sh, generate_data.py)
@@ -23,8 +23,9 @@ src/consumer/        # Non-Spark stream consumers (e.g., Flink fraud-scoring app
 utils/               # Standalone CLI utilities (Pinot schema loaders, ad-hoc Kafka inspectors, one-off data fixers)
 ```
 
-Per-service reference (image, ports, volumes, configuration, caveats) lives in
-[`docs/services.md`](docs/services.md).
+Per-service reference (image, ports, volumes, configuration, caveats) lives
+under [`docs/infrastructure/`](docs/infrastructure/index.md) — one doc per
+component (HDFS, Spark, Kafka, Airflow, Pinot, Superset, Flink).
 
 ## Service map
 
@@ -50,8 +51,9 @@ as **1 NameNode + 2 DataNodes** so replication > 1 is actually exercised.
 
 ## Prerequisites
 
-- Docker Desktop with **≥ 16 GB RAM, 4+ CPUs** allocated. Full stack resident is ~12 GB
-  (the Pinot quartet + Superset add ~3 GB on top of the original HDFS+Spark+Kafka+Airflow set).
+- Docker Desktop with **≥ 16 GB RAM, 4+ CPUs** allocated. Full stack
+  resident is ~12 GB (the Pinot quartet + Superset add ~3 GB on top of the
+  original HDFS+Spark+Kafka+Airflow set).
 - Apple Silicon and amd64 both supported (all images are multi-arch).
 
 ## First-time bring-up

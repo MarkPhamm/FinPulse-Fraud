@@ -551,4 +551,4 @@ to ~5s. We're building the same shape at toy scale.
 
 - [`plan.md`](../plan.md) — step-by-step build order
 - [`docs/scenario.md`](scenario.md) — what we're building and why
-- [`docs/services.md`](services.md) — how each service is wired
+- [`docs/infrastructure/`](../infrastructure/index.md) — how each service is wired

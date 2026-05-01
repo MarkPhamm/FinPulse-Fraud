@@ -954,6 +954,6 @@ is the actual production shape.
   **Verify** block before moving on. If verification fails, debug
   out loud rather than working around the symptom.
 - When introducing a concept marked in the **Concepts** list, take
-  a moment to read about it (Spark docs / the `docs/services.md`
-  file) before writing the code — the goal of this project is
-  learning, not throughput.
+  a moment to read about it (Spark docs / the per-component reference
+  under `docs/infrastructure/`) before writing the code — the goal of
+  this project is learning, not throughput.
