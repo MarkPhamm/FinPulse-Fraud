@@ -1085,7 +1085,7 @@ Mapping back to the rubric in `docs/scenario.md`:
 | Real-time analytics serving | Steps 9 (Pinot hybrid table), 9b (Presto-on-HMS for granular SQL), 10 (Superset on both) |
 | Feature engineering depth | Step 5 (creativity), Step 6 (rules), Step 12 (analysis) |
 | Class-imbalance awareness | Step 6 (PR-AUC, threshold tuning), Step 12 (visuals) |
-| Real-time architecture | Step 8 (event-time, watermark, broadcast state, exactly-once), Step 9 (hybrid tables) |
+| Real-time architecture | Step 8 (event-time, watermark, broadcast state, exactly-once), Step 9 (hybrid tables), Step 9b (HMS catalog separation — storage / catalog / engine) |
 | Business-impact framing | Step 10 (live dashboards), Step 12 (dollars per question) |
 
 **Rough effort estimate (assuming the project is the user's full focus):**
@@ -1099,14 +1099,20 @@ Mapping back to the rubric in `docs/scenario.md`:
 - Step 8: ~6–10 hours (Flink + event-time + exactly-once is the
   steepest ramp; budget extra if you've never written Flink before).
 - Step 9: ~3–5 hours (schema + table-config + Spark→Pinot segment job).
-- Step 10: ~2–3 hours (Superset connection + 3 dashboards).
+- Step 9b: ~1–2 hours (swap path-based writes to `saveAsTable` in the
+  Steps 3–6 jobs; register external tables for any pre-existing
+  outputs via the Presto CLI). The HMS+Presto infra itself is
+  already up — this is purely the table-registration pass.
+- Step 10: ~2–3 hours (Superset connection to **both** Pinot and
+  Presto + 3 dashboards split across them).
 - Step 11: ~2–3 hours.
 - Step 12: ~3–6 hours depending on polish.
 
-**Total: ~30–45 hours of focused work.** The Flink + Pinot path
-adds ~10 hours over the original Spark-Streaming-only plan, but
-buys you the real-time OLAP serving that the Robinhood talk argues
-is the actual production shape.
+**Total: ~31–47 hours of focused work.** The Flink + Pinot + Presto
+path adds ~11 hours over the original Spark-Streaming-only plan,
+but buys you the real-time OLAP serving (Pinot) **and** the
+granular DWH serving (Presto-on-HMS) that the Robinhood talk and
+the lakehouse pattern argue is the actual production shape.
 
 ---
 
