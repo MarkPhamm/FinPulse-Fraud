@@ -14,7 +14,7 @@ low-latency analytical serving via a **hybrid table** that unifies a
 real-time copy (from Kafka) with a nightly Spark-reconciled offline
 copy (from HDFS Parquet).
 
-## Mental model: one Kafka topic, two consumers, one shared bridge
+## Mental model: one Kafka topic, two consumers, two serving engines
 
 The fact stream (`transactions`) lives **only in Kafka**. The four
 other datasets (customers, merchants, devices, fraud-reports) live
@@ -23,29 +23,53 @@ There is no `/landing/transactions/` or `/curated/transactions/`;
 the producer publishes the `.csv.gz` straight to Kafka and that
 topic *is* the system's record of truth for transactions.
 
-Two consumers read the same Kafka topic for two purposes:
+**Two consumers read the same Kafka topic for two purposes:**
 
 1. **Spark — batch consumer.** Nightly, Spark reads the
    `transactions` topic by offset range, joins each event against
    the four HDFS dimensions, and writes the enriched fact +
    customer-features + offline-scored outputs back to HDFS under
    `/analytics/`. These are the inputs to the offline analysis
-   notebook *and* the source for Pinot's offline-table segments.
+   notebook, the source for Pinot's offline-table segments, **and**
+   the granular Parquet that Presto serves via HMS.
 2. **Flink — streaming consumer.** Continuously, Flink reads the
    same topic, applies rules + a keyed velocity window, and writes
    to two more Kafka topics: `transactions-scored` (every event,
    feeds Pinot's real-time table) and `fraud-alerts` (risk ≥ 2,
    a live ticker for Superset).
 
-The two consumer paths **meet** in two places:
+**Two serving engines fan out from the lake, not one:**
 
-- At the **customer_features Parquet**: Spark batch writes it;
+1. **Pinot — pre-aggregated, sub-second.** A hybrid table whose
+   real-time half tails Kafka `transactions-scored` and whose offline
+   half is rebuilt nightly from `/analytics/transactions_enriched/`.
+   Fixed schema, segment-indexed, designed for live dashboards at
+   high concurrency. Best for *"what's the fraud rate this hour?"*.
+2. **PrestoDB-on-HMS — granular, second-scale.** A SQL engine that
+   reads the *same* `/curated/*` and `/analytics/*` Parquet, but via
+   the **Hive Metastore catalog** rather than path-based access.
+   Spark's `saveAsTable` writes the bytes and registers the table in
+   HMS in one call; Presto discovers tables by querying HMS over
+   Thrift. Bytes still live in HDFS — three concerns, three
+   independent components: **storage (HDFS), catalog (HMS-on-Postgres),
+   engine (Presto)**. Best for *"join 3 tables, slice by 4 columns,
+   show me every row"*.
+
+The two paths **meet in three places:**
+
+- At the **customer_features Parquet** — Spark batch writes it;
   Flink broadcast-loads it. Without the batch path, Flink has no
   normal-behavior baseline to compare each event against.
-- At the **Pinot hybrid table**: Flink writes the real-time copy
+- At the **Pinot hybrid table** — Flink writes the real-time copy
   via Kafka; nightly Spark writes the reconciled offline copy from
   HDFS. Superset queries the logical union — yesterday from the
   audit-grade reconciled offline segments, today from real-time.
+- At the **Hive Metastore catalog** — Spark `saveAsTable` registers
+  every `/curated/*` and `/analytics/*` table in HMS. Presto reads
+  them through the Hive connector. The notebook reads the same files
+  path-based; HMS is just the *catalog* that lets Presto and Superset
+  see the same data Spark wrote, without each engine having to know
+  where on HDFS each table lives.
 
 ```text
                                     transactions.csv.gz
@@ -57,27 +81,37 @@ The two consumer paths **meet** in two places:
               /landing/             ┌─────┴─────┐       ┌───┴────┐
                   ↓                 │  Spark    │       │ Flink  │ ◄── broadcast state
               /curated/  ──────────►│  batch    │       │ scoring│     (customer_features)
-                                    │ consumer  │       └───┬────┘
-                                    └─────┬─────┘           │
-                                          ↓                 ↓
-                                /analytics/       Kafka 'transactions-scored'
-                                transactions_enriched      'fraud-alerts'
-                                          ↓                 ↓
-                                /analytics/customer_features  Pinot real-time table
-                                          ↓                 ↓
-                                offline scoring             │
-                                          ↓                 ↓
-                                analysis notebook           │
-                                          │                 │
-                                          └──► Pinot offline table ◄── union ──► Superset
-                                                (nightly Spark)
+                  │                 │ consumer  │       └───┬────┘
+                  │                 └─────┬─────┘           │
+                  │                       │                 │
+                  │                       ↓                 ↓
+                  │             /analytics/*       Kafka 'transactions-scored'
+                  │             (enriched, features,         'fraud-alerts'
+                  │              offline-scored)                ↓
+                  │                       │                 Pinot real-time
+                  │                       │                     │
+                  │                       ↓                     │
+                  │              ┌────────────────┐             │
+                  │              │ saveAsTable    │             │
+                  │              │  ↓             │             │
+                  └──────────────►  Hive Metastore (catalog)    │
+                                 │  ↓             │             │
+                                 │ PrestoDB ──────┼──► Superset ◄── Pinot offline
+                                 └────────────────┘                  (nightly Spark)
+                                          │
+                                          ▼
+                                 analysis notebook (path-based)
 ```
 
-The arrow from `customer_features` into the Flink job is the
-**bridge**. It's a one-time read at job startup (refreshed each
-night when the Airflow batch DAG rebuilds the feature store); Flink
-holds those ~100K rows in **broadcast state** on every task manager
-so every event can be enriched without a network hop.
+Two arrows worth naming. The arrow from `customer_features` into
+Flink is the **broadcast-state bridge** — a one-time read at job
+startup (refreshed each night when the Airflow batch DAG rebuilds
+the feature store); Flink holds those ~100K rows in operator state
+on every task manager so every event can be enriched without a
+network hop. The arrow from Spark's `/analytics/*` outputs into HMS
+is the **catalog bridge** — `saveAsTable` registers the table once
+per write, after which Presto and Superset can find it by name
+instead of HDFS path.
 
 ## Where the raw files come from
 
