@@ -1,0 +1,52 @@
+<?xml version="1.0"?>
+<configuration>
+  <!--
+    Hive Metastore (HMS) standalone configuration.
+
+    HMS is a Thrift service that stores table metadata (schemas, partitions,
+    table locations) in a relational backing store. It does NOT store any
+    actual data — Parquet bytes still live in HDFS. Spark `saveAsTable`
+    registers tables here; Presto reads them via the Hive connector.
+
+    Property prefix in Hive 4.x is `metastore.` (not `hive.metastore.`)
+    when running standalone metastore (SERVICE_NAME=metastore). The JDBC
+    properties keep the legacy `javax.jdo.option.*` names regardless.
+  -->
+
+  <!-- Backing store: dedicated Postgres (see docker-compose.yml) -->
+  <property>
+    <name>javax.jdo.option.ConnectionURL</name>
+    <value>jdbc:postgresql://metastore-db:5432/metastore</value>
+  </property>
+  <property>
+    <name>javax.jdo.option.ConnectionDriverName</name>
+    <value>org.postgresql.Driver</value>
+  </property>
+  <property>
+    <name>javax.jdo.option.ConnectionUserName</name>
+    <value>hive</value>
+  </property>
+  <property>
+    <name>javax.jdo.option.ConnectionPassword</name>
+    <value>hive</value>
+  </property>
+
+  <!-- Where managed-table data lives. Must agree with Spark's
+       spark.sql.warehouse.dir (chunk 3). -->
+  <property>
+    <name>metastore.warehouse.dir</name>
+    <value>hdfs://namenode:9000/warehouse</value>
+  </property>
+
+  <!-- Thrift endpoint clients connect to. -->
+  <property>
+    <name>metastore.thrift.uris</name>
+    <value>thrift://hive-metastore:9083</value>
+  </property>
+
+  <!-- Disable schema-event notification auth (single-user dev cluster). -->
+  <property>
+    <name>metastore.event.db.notification.api.auth</name>
+    <value>false</value>
+  </property>
+</configuration>

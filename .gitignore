@@ -227,6 +227,10 @@ spark-warehouse/
 metastore_db/
 .tmp-finpulse-*
 
+# Hive Metastore Postgres JDBC driver (downloaded by `make hive-deps`).
+# Track the directory + .gitkeep, exclude the .jar.
+docker/hive-metastore/jars/*.jar
+
 # ---- Editor / OS ----
 .DS_Store
 .idea/

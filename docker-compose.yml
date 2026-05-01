@@ -27,6 +27,8 @@ volumes:
   superset-data:
   # Flink (stream processing layer)
   flink-data:
+  # Hive Metastore (DWH catalog layer)
+  metastore-db-data:
 
 # -----------------------------------------------------------------------------
 # Shared blocks
@@ -161,6 +163,7 @@ services:
       - ./jobs:/opt/jobs
       - ./docker/hadoop-client:/opt/hadoop-conf:ro
       - ./docker/spark/log4j2.properties:/opt/spark/conf/log4j2.properties:ro
+      - ./docker/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
     networks: [finpulse]
 
   spark-worker-1:
@@ -186,6 +189,7 @@ services:
       - ./jobs:/opt/jobs
       - ./docker/hadoop-client:/opt/hadoop-conf:ro
       - ./docker/spark/log4j2.properties:/opt/spark/conf/log4j2.properties:ro
+      - ./docker/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
     networks: [finpulse]
 
   spark-worker-2:
@@ -211,6 +215,7 @@ services:
       - ./jobs:/opt/jobs
       - ./docker/hadoop-client:/opt/hadoop-conf:ro
       - ./docker/spark/log4j2.properties:/opt/spark/conf/log4j2.properties:ro
+      - ./docker/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
     networks: [finpulse]
 
   # ---------- Kafka ---------------------------------------------------------
@@ -590,3 +595,177 @@ services:
       flink-jobmanager:
         condition: service_healthy
     networks: [finpulse]
+
+  # ---------- Hive Metastore (DWH catalog layer) --------------------------
+  # The Hive Metastore (HMS) is a Thrift service that stores table metadata
+  # (schemas, partitions, locations) in a relational backing store. It does
+  # NOT store any actual data — Parquet bytes still live in HDFS. The
+  # lakehouse pattern decouples three concerns:
+  #   - storage   : HDFS  (where Parquet bytes live)
+  #   - metadata  : HMS   (what tables exist, what columns, where they point)
+  #   - engines   : Spark + Presto (read both pieces independently)
+  #
+  # Topology:
+  #   metastore-db          : dedicated Postgres for the HMS catalog. Kept
+  #                           separate from Airflow's Postgres so `make nuke`
+  #                           on one doesn't silently nuke the other's data.
+  #   hive-metastore-init   : one-shot, idempotent — runs schematool only
+  #                           if the schema doesn't already exist. Mirrors
+  #                           the airflow-init / superset-init pattern.
+  #   hive-metastore        : long-running Thrift server on :9083 (in-network
+  #                           only — only Spark + Presto need it).
+  #
+  # Image: apache/hive:4.0.0 is multi-arch (amd64 + arm64). The official
+  # `4.0.0-standalone-metastore` tag does NOT exist; the full image runs in
+  # metastore-only mode via SERVICE_NAME=metastore + IS_RESUME=true.
+  #
+  # JDBC driver: apache/hive does not bundle the Postgres driver. Run
+  # `make hive-deps` once on the host to download postgresql-42.7.2.jar
+  # into ./docker/hive-metastore/jars/ (gitignored). Same posture as the
+  # Spark Kafka connector (`--packages` at submit time): fetch deps on
+  # demand, don't bake images.
+  metastore-db:
+    image: postgres:16-alpine
+    container_name: metastore-db
+    hostname: metastore-db
+    environment:
+      POSTGRES_USER: hive
+      POSTGRES_PASSWORD: hive
+      POSTGRES_DB: metastore
+    volumes:
+      - metastore-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "hive"]
+      interval: 5s
+      retries: 10
+    networks: [finpulse]
+
+  hive-metastore-init:
+    image: apache/hive:4.0.0
+    container_name: hive-metastore-init
+    user: root
+    entrypoint:
+      - bash
+      - -c
+      - |
+        set -e
+        # Sanity: postgres JDBC driver must be present on the host.
+        if ! ls /opt/hive/jdbc/postgresql-*.jar > /dev/null 2>&1; then
+          echo "ERROR: postgres JDBC driver missing in ./docker/hive-metastore/jars/"
+          echo "       Run 'make hive-deps' on the host to download it."
+          exit 1
+        fi
+        # Stage the driver into Hive's classpath.
+        cp /opt/hive/jdbc/postgresql-*.jar /opt/hive/lib/
+        # Idempotent schema init: only run schematool if the catalog is empty.
+        if /opt/hive/bin/schematool -dbType postgres -info > /dev/null 2>&1; then
+          echo "HMS schema already initialized — skipping schematool"
+        else
+          echo "Initializing HMS schema in metastore-db..."
+          /opt/hive/bin/schematool -dbType postgres -initSchema --verbose
+        fi
+        # Ensure the HDFS warehouse root exists (matches metastore.warehouse.dir).
+        export HADOOP_CONF_DIR=/opt/hadoop-conf
+        /opt/hadoop/bin/hdfs dfs -mkdir -p /warehouse 2>/dev/null || \
+          /opt/hive/bin/hadoop fs -mkdir -p /warehouse 2>/dev/null || true
+        echo "HMS init complete."
+    environment:
+      HADOOP_CONF_DIR: /opt/hadoop-conf
+    volumes:
+      - ./docker/hive-metastore/metastore-site.xml:/opt/hive/conf/metastore-site.xml:ro
+      - ./docker/hive-metastore/jars:/opt/hive/jdbc:ro
+      - ./docker/hadoop-client:/opt/hadoop-conf:ro
+    depends_on:
+      metastore-db:
+        condition: service_healthy
+      namenode:
+        condition: service_healthy
+    networks: [finpulse]
+    restart: "no"
+
+  hive-metastore:
+    image: apache/hive:4.0.0
+    container_name: hive-metastore
+    hostname: hive-metastore
+    user: root
+    entrypoint:
+      - bash
+      - -c
+      - |
+        set -e
+        # Stage postgres JDBC driver (host directory bind-mounted at /opt/hive/jdbc).
+        cp /opt/hive/jdbc/postgresql-*.jar /opt/hive/lib/
+        # Delegate to the image's original entrypoint, which honours
+        # SERVICE_NAME=metastore + IS_RESUME=true to skip schematool.
+        exec /entrypoint.sh
+    environment:
+      SERVICE_NAME: metastore
+      DB_DRIVER: postgres
+      IS_RESUME: "true"
+      HADOOP_CONF_DIR: /opt/hadoop-conf
+    volumes:
+      - ./docker/hive-metastore/metastore-site.xml:/opt/hive/conf/metastore-site.xml:ro
+      - ./docker/hive-metastore/jars:/opt/hive/jdbc:ro
+      - ./docker/hadoop-client:/opt/hadoop-conf:ro
+    depends_on:
+      hive-metastore-init:
+        condition: service_completed_successfully
+    networks: [finpulse]
+    healthcheck:
+      # HMS exposes Thrift on 9083 — no HTTP endpoint, so just probe TCP.
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/9083' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # ---------- PrestoDB coordinator (DWH query engine) ---------------------
+  # PrestoDB is a distributed SQL engine that reads HDFS Parquet via the
+  # Hive connector + Hive Metastore. It serves the *granular* layer next to
+  # Pinot's pre-aggregated streaming layer — same lakehouse, different access
+  # pattern.
+  #
+  # Single-node "coordinator + embedded worker" via:
+  #   coordinator=true
+  #   node-scheduler.include-coordinator=true
+  # Production deployments split coordinator from workers.
+  #
+  # Image: prestodb/presto:0.292 — multi-arch (amd64 + arm64). On arm64 the
+  # JVM prints "Support for the ARM architecture is experimental" — advisory,
+  # not a failure. (Trino has stronger arm64 support; revisit if perf matters.)
+  #
+  # Connector name is `hive-hadoop2` in PrestoDB (Trino renamed it to `hive`).
+  # See docker/presto/etc/catalog/hive.properties.
+  #
+  # Port: host 8086 -> container 8080. (8080 is taken by Spark Master UI;
+  # the in-network port stays 8080 because Superset, presto-cli, and the
+  # discovery URI all default to it.)
+  presto-coordinator:
+    image: prestodb/presto:0.292
+    container_name: presto-coordinator
+    hostname: presto-coordinator
+    ports:
+      - "8086:8080"
+    environment:
+      # Java attach API: required by Presto's spill-to-disk machinery.
+      JAVA_TOOL_OPTIONS: -Djdk.attach.allowAttachSelf=true
+    volumes:
+      # Our config replaces the image's default etc/ directory wholesale.
+      - ./docker/presto/etc:/opt/presto-server/etc:ro
+      # HDFS client config: same XML mounted into Spark master/workers.
+      # hive.properties references /etc/hadoop/conf/{core,hdfs}-site.xml.
+      - ./docker/hadoop-client:/etc/hadoop/conf:ro
+    depends_on:
+      hive-metastore:
+        condition: service_started
+      namenode:
+        condition: service_healthy
+    networks: [finpulse]
+    healthcheck:
+      # /v1/info returns {"starting": false, ...} once the cluster has loaded
+      # all catalogs and is ready to accept queries.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/v1/info | grep -q '\"starting\":false'"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s

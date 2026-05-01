@@ -6,3 +6,9 @@
 
 # Driver for connecting Superset -> Apache Pinot.
 pinotdb
+
+# Driver for connecting Superset -> PrestoDB. SQLAlchemy URI is
+#     presto://presto-coordinator:8080/hive/default
+# (in-network port 8080, NOT host port 8086 — Superset is in the same
+# docker network as the Presto coordinator).
+pyhive[presto]>=0.7.0

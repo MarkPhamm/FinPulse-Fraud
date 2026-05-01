@@ -130,6 +130,51 @@ pinot_smoke() {
 }
 
 # ----------------------------------------------------------------------------
+presto_smoke() {
+  step "Presto: /v1/info + hive catalog + Spark<->HMS<->Presto round-trip"
+
+  # 1. Coordinator REST: starting=false means catalogs are loaded.
+  $COMPOSE exec -T presto-coordinator bash -c '
+    curl -fsS http://localhost:8080/v1/info | grep -q "\"starting\":false"
+  ' >/dev/null || die "presto /v1/info not ready (starting != false)"
+  ok "Presto coordinator ready"
+
+  # 2. The hive catalog must exist (catches a missing or misconfigured
+  #    docker/presto/etc/catalog/hive.properties).
+  out=$($COMPOSE exec -T presto-coordinator /opt/presto-cli \
+      --server localhost:8080 --execute 'SHOW CATALOGS' 2>/dev/null)
+  echo "$out" | grep -q '^"hive"$' || die "hive catalog missing from SHOW CATALOGS: $out"
+  ok "hive catalog registered"
+
+  # 3. Spark -> HMS -> Presto end-to-end round-trip.
+  #    Run smoke_presto.py via spark-submit (saveAsTable("default.smoke_hms")),
+  #    then query the same table via Presto.
+  # --driver-memory / --executor-memory caps keep the Spark surge small so
+  # Presto's 1 GB heap doesn't get OOM-killed by the kernel on a tight
+  # ~8 GB Docker Desktop allocation. 512m is the practical floor: Spark
+  # rejects driver heap below ~471 MB ("System memory ... must be at least
+  # 471859200"). Bump higher if you give Docker more memory.
+  $COMPOSE exec -T spark-master bash -c '
+    /opt/spark/bin/spark-submit \
+        --master spark://spark-master:7077 \
+        --driver-memory 512m \
+        --executor-memory 512m \
+        --packages org.apache.spark:spark-hive_2.12:3.5.3 \
+        /opt/jobs/smoke_presto.py 2>&1
+  ' | tee /tmp/finpulse-smoke-presto.log >/dev/null \
+      || die "spark-submit smoke_presto.py failed (see /tmp/finpulse-smoke-presto.log)"
+  grep -q 'smoke_presto OK' /tmp/finpulse-smoke-presto.log \
+      || die "smoke_presto.py ran but did not log 'smoke_presto OK'"
+
+  count=$($COMPOSE exec -T presto-coordinator /opt/presto-cli \
+      --catalog hive --schema default \
+      --execute 'SELECT COUNT(*) FROM smoke_hms' 2>/dev/null \
+      | tr -d '"' | tail -1)
+  test "${count}" = "3" || die "presto saw smoke_hms with $count rows, expected 3"
+  ok "Spark<->HMS<->Presto round-trip works (3 rows)"
+}
+
+# ----------------------------------------------------------------------------
 flink_smoke() {
   step "Flink: jobmanager /overview + taskmanager registration"
 
@@ -156,6 +201,7 @@ case "${1:-all}" in
   airflow) airflow_smoke ;;
   pinot)   pinot_smoke ;;
   flink)   flink_smoke ;;
-  all)     hdfs_smoke; kafka_smoke; spark_smoke ;;
-  *)       echo "usage: $0 [hdfs|kafka|spark|airflow|pinot|flink|all]"; exit 2 ;;
+  presto)  presto_smoke ;;
+  all)     hdfs_smoke; kafka_smoke; spark_smoke; airflow_smoke; pinot_smoke; flink_smoke; presto_smoke ;;
+  *)       echo "usage: $0 [hdfs|kafka|spark|airflow|pinot|flink|presto|all]"; exit 2 ;;
 esac
