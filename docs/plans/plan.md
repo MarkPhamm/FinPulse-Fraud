@@ -37,9 +37,10 @@ quality, and dollar-impact framing** — not pure accuracy.
 
 This plan turns that brief into 12 small, observable steps so each new
 concept lands one at a time. Steps 1–8 + 11–12 implement the four
-stages; Steps 9–10 add **two complementary serving layers** — Pinot
-for pre-aggregated streaming, PrestoDB-on-HMS for granular ad-hoc —
-plus Superset on top of both (per the Robinhood pattern in
+stages; Steps 9, 9b, and 10 add **two complementary serving layers** —
+Pinot for pre-aggregated streaming (Step 9), PrestoDB-on-HMS for
+granular ad-hoc (Step 9b) — plus Superset on top of both at Step 10
+(per the Robinhood pattern in
 [`docs/odsc/robinhood_infrastructure.md`](../odsc/robinhood_infrastructure.md)).
 Neither serving layer is strictly required by the brief, but together
 they make the real-time architecture credit easier to demonstrate and

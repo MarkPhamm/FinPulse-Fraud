@@ -6,7 +6,10 @@ Distributed filesystem for the four **dimension** datasets
 `/analytics/scored`). Transactions live in **Kafka, not HDFS** — see
 [`docs/plans/dataflow.md`](../plans/dataflow.md). HDFS exists so
 that (a) `dfs.replication` is a real thing the cluster exercises and
-(b) Spark and Flink can both treat the dim tables as durable input.
+(b) Spark, Flink, and PrestoDB can all treat the dim + analytics
+tables as durable input. Presto reaches them through the Hive
+Metastore catalog (see [`presto.md`](presto.md)) rather than
+path-based; the bytes still live here.
 
 ## Topology
 
@@ -124,7 +127,8 @@ Where HDFS sits in the broader landscape of distributed storage:
 S3-compatible object storage has won. We use HDFS here because the
 class rubric mandates the Hadoop ecosystem; in production, swap to
 S3/MinIO and most of this stack (Spark, Flink, Pinot offline
-segments) keeps working with a one-line config change.
+segments, **and PrestoDB via the Hive connector's `s3a://`
+reader**) keeps working with a one-line config change.
 
 ## Common commands
 

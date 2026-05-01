@@ -1,11 +1,13 @@
 # Dataflow — end to end
 
 This doc explains how the five raw datasets in `data/` move through the
-stack and end up powering two consumers: an **analysis notebook**
-(batch reader) and **Superset dashboards** (real-time + historical
-reader, fed by Pinot). It complements [`plan.md`](plan.md) — the plan
-tells you *what to build in what order*; this doc tells you *what data
-is moving and why*.
+stack and end up powering two consumers — **Superset dashboards** and
+the **analysis notebook** — both of which read through the same two
+serving engines: **Pinot** for pre-aggregated streaming queries and
+**PrestoDB on the Hive Metastore** for granular ad-hoc SQL over HDFS
+Parquet. It complements [`plan.md`](plan.md) — the plan tells you
+*what to build in what order*; this doc tells you *what data is moving
+and why*.
 
 The streaming layer follows the Robinhood
 [Kafka → Flink → Kafka → Pinot](../odsc/robinhood_infrastructure.md)
