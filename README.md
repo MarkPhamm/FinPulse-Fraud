@@ -10,6 +10,28 @@ ODSC talks on building production data clusters with Spark, Kafka, Flink,
 Pinot, and Presto. The Robinhood reference architecture our diagrams
 trace lives at [`docs/odsc/robinhood_infrastructure.md`](docs/odsc/robinhood_infrastructure.md).
 
+## Infrastructure
+
+What each component does in this stack:
+
+| Component        | Role                                                                                              |
+|------------------|---------------------------------------------------------------------------------------------------|
+| **HDFS**         | Data lake storage — landing + curated dim datasets and `/analytics/*` Spark batch outputs (Parquet). Transactions live in Kafka, not here. |
+| **Kafka**        | Streaming source of truth for the `transactions` fact stream. Spark batch-reads it by offset; Flink stream-reads it continuously. Three topics: `transactions`, `transactions-scored`, `fraud-alerts`. |
+| **Spark**        | Batch compute — joins Kafka transactions with HDFS dimensions, builds the feature store, runs offline rule + ML scoring, writes Pinot offline segments. Registers tables in HMS via `saveAsTable`. |
+| **Flink**        | Real-time stream scoring — Kafka → Flink → Kafka, event-time native, exactly-once via two-phase commit. Emits `transactions-scored` (every event) and `fraud-alerts` (risk ≥ 2). |
+| **Pinot**        | Real-time OLAP serving — `transactions_scored` hybrid table with a real-time path from Kafka and a nightly Spark-built offline path from HDFS. Sub-second on pre-aggregated dashboards. |
+| **Hive Metastore** | Catalog layer (Postgres-backed) — registers every `/curated/*` and `/analytics/*` table so Presto can find them by name. Decouples *catalog* from *storage* and *engine*. |
+| **PrestoDB**     | DWH serving for *granular* Parquet — distributed SQL engine reading HDFS via the Hive connector + HMS catalog. Complements Pinot: arbitrary joins and full row detail at second-scale latency. |
+| **Superset**     | BI / dashboards on top of **both** Pinot (live) and Presto (granular ad-hoc), via two SQLAlchemy drivers (`pinotdb`, `pyhive[presto]`). |
+| **Airflow**      | Orchestration — nightly batch DAG (landing → curate → enrich → score → Pinot offline + HMS register) and a streaming-monitor DAG (Flink job liveness + checkpoint age + alert rate). |
+
+Per-service deep-dive (image, ports, volumes, configuration, "why this
+shape", caveats) lives under
+[`docs/infrastructure/`](docs/infrastructure/index.md) — one doc per
+component. End-to-end data flow is in
+[`docs/plans/dataflow.md`](docs/plans/dataflow.md).
+
 ## Layout
 
 ```text
