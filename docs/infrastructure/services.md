@@ -486,6 +486,7 @@ starts after the metadata schema exists.
 ships `/app/docker/docker-init.sh` or `/app/docker/docker-bootstrap.sh`
 (those scripts only exist in the upstream source repo, not in the published
 image). We bring our own minimal versions:
+
 - `docker/superset/superset-init.sh` → bind-mounted at `/app/superset-init.sh`
   on `superset-init`. Pip-installs `requirements-local.txt`, runs the three
   init commands, exits cleanly so the long-running container can start.
@@ -505,6 +506,7 @@ container runs (pip download); avoids introducing a build step to the repo.
 `docker/superset/superset_config.py` to
 `sqlite:////app/superset_home/superset.db`. Fine for single-user class scope
 (Superset themselves recommend SQLite only for dev/eval). To upgrade:
+
 - (a) add an init SQL script under `postgres:/docker-entrypoint-initdb.d/`
   that creates a `superset` database, then
 - (b) point `SQLALCHEMY_DATABASE_URI` at `postgresql+psycopg2://superset:...@postgres/superset`.
@@ -555,6 +557,7 @@ at boot — we use that for `jobmanager.rpc.address`, RocksDB state backend,
 dirs (under the `flink-data` volume).
 
 **Bind mounts.**
+
 - `./src/consumer:/opt/flink/usrlib:ro` — drop a built jar/python module
   here and submit it via `flink run /opt/flink/usrlib/<artifact>` from
   inside the container.
