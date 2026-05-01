@@ -72,35 +72,58 @@ The two paths **meet in three places:**
   where on HDFS each table lives.
 
 ```text
-                                    transactions.csv.gz
-                                            ↓
-          customer / merchant /        Kafka producer
-          device / fraud-report               ↓
-              .gz files               Kafka 'transactions' (source of truth)
-                  ↓                       ↓                 ↓
-              /landing/             ┌─────┴─────┐       ┌───┴────┐
-                  ↓                 │  Spark    │       │ Flink  │ ◄── broadcast state
-              /curated/  ──────────►│  batch    │       │ scoring│     (customer_features)
-                  │                 │ consumer  │       └───┬────┘
-                  │                 └─────┬─────┘           │
-                  │                       │                 │
-                  │                       ↓                 ↓
-                  │             /analytics/*       Kafka 'transactions-scored'
-                  │             (enriched, features,         'fraud-alerts'
-                  │              offline-scored)                ↓
-                  │                       │                 Pinot real-time
-                  │                       │                     │
-                  │                       ↓                     │
-                  │              ┌────────────────┐             │
-                  │              │ saveAsTable    │             │
-                  │              │  ↓             │             │
-                  └──────────────►  Hive Metastore (catalog)    │
-                                 │  ↓             │             │
-                                 │ PrestoDB ──────┼──► Superset ◄── Pinot offline
-                                 └────────────────┘                  (nightly Spark)
-                                          │
-                                          ▼
-                                 analysis notebook (path-based)
+   FACT STREAM                              DIMENSIONS
+   ═══════════                              ══════════
+   transactions.csv.gz                      customer / merchant /
+          │                                 device / fraud-report .gz
+          ▼                                          │
+    Kafka producer                                   ▼
+          │                                    HDFS /landing
+          ▼                                          │
+   ┌── Kafka 'transactions' ──┐                      ▼
+   │   (source of truth)      │               HDFS /curated
+   │                          │               (Parquet, partitioned)
+   │ batch         stream     │                      │
+   │ read          read       │                      │
+   ▼                          ▼                      │
+ ┌──────────────┐        ┌──────────────┐            │
+ │ Spark batch  │        │    Flink     │            │
+ │  consumer    │        │   streaming  │ ◄──────────┤
+ │  (joins HDFS │        │   scoring    │  broadcast │
+ │   dims)      │        │              │  state     │
+ └──────┬───────┘        └──────┬───────┘            │
+        │                       │                    │
+        │ saveAsTable           │ writes Kafka       │
+        │ + Parquet             │                    │
+        ▼                       ▼                    │
+ ┌─────────────────┐      ┌────────────────┐         │
+ │ HDFS            │      │ Kafka topics:  │         │
+ │ /analytics/*    │ ─┐   │ 'transactions- │         │
+ │   +             │  │   │  scored'       │         │
+ │ HMS catalog     │  │   │ 'fraud-alerts' │         │
+ │ (Postgres)      │  │   └────────┬───────┘         │
+ └────────┬────────┘  │            │                 │
+          │           │ nightly    ▼                 │
+          │           │ Spark    ┌────────────┐      │
+          │           └─────────►│   Pinot    │      │
+          │           segments   │   hybrid   │      │
+          │                      │   table    │      │
+          │                      └─────┬──────┘      │
+          ▼                            │             │
+   ┌──────────────┐                    │             │
+   │   PrestoDB   │                    │             │
+   │  coordinator │                    │             │
+   └──────┬───────┘                    │             │
+          │                            │             │
+          └──────────────┬─────────────┘             │
+                         ▼                           │
+                  ┌─────────────┐                    │
+                  │   Superset  │                    │
+                  │  dashboards │                    │
+                  └─────────────┘                    │
+                                                     │
+   Analysis notebook ◄── reads /analytics/* ─────────┘
+   (path-based, no HMS, no engine — same files Spark wrote)
 ```
 
 Two arrows worth naming. The arrow from `customer_features` into
