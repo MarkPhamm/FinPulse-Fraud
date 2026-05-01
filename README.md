@@ -1,6 +1,10 @@
 # FinPulse-Fraud
 
-Fraud detection & transaction analytics on a HDFS / Spark / Kafka / Airflow stack.
+Fraud detection & transaction analytics on a HDFS / Spark / Kafka / Flink /
+Pinot / PrestoDB-on-HMS / Superset / Airflow stack, following the
+[Robinhood data infrastructure](docs/odsc/robinhood_infrastructure.md)
+pattern (Kafka → Flink → Pinot for streaming, Spark + HMS + Presto for the
+batch / granular DWH side).
 See [`docs/scenario.md`](docs/scenario.md) for the project brief.
 
 The streaming + dual-serving-layer architecture (Spark batch + Kafka + Flink
