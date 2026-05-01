@@ -173,22 +173,22 @@ flowchart LR
     end
 
     %% TOP LANE — Spark batch, orchestrated by Airflow
-    subgraph batch_lane["Spark batch lane<br/>(orchestrated by Airflow)"]
+    subgraph batch_lane["Spark batch lane"]
         direction LR
-        subgraph landing["HDFS /landing<br/>(raw, immutable)"]
+        subgraph landing["HDFS /landing"]
             l2[customer-profiles]
             l3[merchant-directory]
             l4[device-fingerprints]
             l5[fraud-reports]
         end
-        subgraph curated["HDFS /curated<br/>(Parquet, partitioned)"]
+        subgraph curated["HDFS /curated"]
             c2[customer-profiles]
             c3[merchant-directory]
             c4[device-fingerprints<br/>by device_type]
             c5[fraud-reports<br/>by fraud_type]
         end
         spark["Spark<br/>transformation<br/>(batch consumer of<br/>Kafka 'transactions'<br/>+ HDFS dims)"]
-        subgraph analytics["HDFS /analytics<br/>(Spark joins Kafka txns + HDFS dims)"]
+        subgraph analytics["HDFS /analytics"]
             a1[transactions_enriched<br/>by dt]
             a2[customer_features]
             a3[scored<br/>offline]
@@ -203,20 +203,20 @@ flowchart LR
     k3>"Kafka<br/>topic: fraud-alerts"]
 
     %% RIGHT — single serving layer wrapping the two engines + consumers
-    subgraph serving["Serving layer<br/>(Pinot + Presto)"]
+    subgraph serving["Serving layer"]
         direction TB
-        subgraph pinot["Pinot hybrid table<br/>'transactions_scored'"]
-            prt[real-time table<br/>from Kafka]
-            pof[offline table<br/>from HDFS Parquet]
+        subgraph pinot["Pinot hybrid table"]
+            prt[real-time<br/>from Kafka]
+            pof[offline<br/>from HDFS]
         end
-        subgraph dwh["DWH layer<br/>(granular Parquet)"]
-            hms[(Hive Metastore<br/>Postgres-backed catalog)]
-            presto["PrestoDB<br/>coordinator"]
+        subgraph dwh["DWH (granular)"]
+            hms[(Hive Metastore<br/>Postgres catalog)]
+            presto["PrestoDB"]
         end
     end
     subgraph apps["Consumers"]
-        ss[Superset dashboards<br/>Pinot + Presto]
-        nb[Analysis notebook<br/>7 business Qs]
+        ss[Superset<br/>dashboards]
+        nb[Analysis<br/>notebook]
     end
 
     %% Dimensions: host -> /landing -> /curated -> Spark
