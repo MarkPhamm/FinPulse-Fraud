@@ -1031,16 +1031,38 @@ answers the brief asks for. This is what the rubric calls out as
   rendering — your choice). One section per business question:
   1. Top fraud features (feature importance from Step 6 model).
   2. Merchant risk score update (compare brief's "stale 2-year-old"
-     scores to actual fraud rates from `/analytics/transactions_enriched`).
+     scores to actual fraud rates — query Presto on
+     `hive.analytics.transactions_enriched`).
   3. Velocity attack: distribution of attack sizes, $ exposure.
   4. Device + channel risk: VPN correlation, OS breakdown.
   5. Geographic risk: home-country × txn-country fraud heatmap.
   6. False-positive analysis: which customer segments flag falsely.
   7. Customer behavior anomalies: feature deltas for confirmed-fraud
      rows vs population.
-- Read directly from `/analytics/*` via PySpark in the notebook
-  (the `pyspark` package is in the Spark image; mount the repo into
-  a Jupyter container, or run Spark locally with same `HADOOP_CONF_DIR`).
+- **Read via the serving layer, not path-based PySpark.** Same
+  access pattern as Superset — Presto for granular SQL over
+  `/analytics/*` and `/curated/*` (registered in HMS by Step 9b),
+  Pinot for pre-aggregated time-series. Both have Python clients
+  that work in Jupyter:
+
+  ```python
+  # Granular SQL via Presto
+  from pyhive import presto
+  conn = presto.Connection(host="presto-coordinator", port=8080,
+                           catalog="hive", schema="analytics")
+  df = pd.read_sql("SELECT * FROM transactions_enriched LIMIT 1000", conn)
+
+  # Pre-aggregated trends via Pinot
+  from pinotdb import connect
+  pinot = connect(host="pinot-broker", port=8099, path="/query/sql",
+                  scheme="http")
+  df = pd.read_sql("SELECT dt, SUM(risk_score) FROM transactions_scored "
+                   "GROUP BY dt ORDER BY dt", pinot)
+  ```
+
+  No `pyspark.read.parquet("hdfs://...")` calls — HMS is the single
+  source of truth for what tables exist, and the notebook should
+  share that catalog with Superset rather than diverge.
 
 **Verify.**
 

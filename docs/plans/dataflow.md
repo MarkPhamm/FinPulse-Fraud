@@ -29,9 +29,10 @@ topic *is* the system's record of truth for transactions.
    `transactions` topic by offset range, joins each event against
    the four HDFS dimensions, and writes the enriched fact +
    customer-features + offline-scored outputs back to HDFS under
-   `/analytics/`. These are the inputs to the offline analysis
-   notebook, the source for Pinot's offline-table segments, **and**
-   the granular Parquet that Presto serves via HMS.
+   `/analytics/`. These are the source for Pinot's offline-table
+   segments **and** the granular Parquet that Presto serves via HMS
+   — both of which the notebook and Superset query (no consumer
+   reads `/analytics/*` path-based).
 2. **Flink — streaming consumer.** Continuously, Flink reads the
    same topic, applies rules + a keyed velocity window, and writes
    to two more Kafka topics: `transactions-scored` (every event,
@@ -66,10 +67,11 @@ The two paths **meet in three places:**
   audit-grade reconciled offline segments, today from real-time.
 - At the **Hive Metastore catalog** — Spark `saveAsTable` registers
   every `/curated/*` and `/analytics/*` table in HMS. Presto reads
-  them through the Hive connector. The notebook reads the same files
-  path-based; HMS is just the *catalog* that lets Presto and Superset
-  see the same data Spark wrote, without each engine having to know
-  where on HDFS each table lives.
+  them through the Hive connector; both Superset *and* the analysis
+  notebook reach this data through Presto, not via path-based PySpark
+  reads. HMS is the central *catalog* that lets every consumer see
+  the same data Spark wrote, without each engine having to know where
+  on HDFS each table lives.
 
 ```text
    FACT STREAM                              DIMENSIONS
@@ -91,39 +93,40 @@ The two paths **meet in three places:**
  │  consumer    │        │   streaming  │ ◄──────────┤
  │  (joins HDFS │        │   scoring    │  broadcast │
  │   dims)      │        │              │  state     │
- └──────┬───────┘        └──────┬───────┘            │
-        │                       │                    │
-        │ saveAsTable           │ writes Kafka       │
-        │ + Parquet             │                    │
-        ▼                       ▼                    │
- ┌─────────────────┐      ┌────────────────┐         │
- │ HDFS            │      │ Kafka topics:  │         │
- │ /analytics/*    │ ─┐   │ 'transactions- │         │
- │   +             │  │   │  scored'       │         │
- │ HMS catalog     │  │   │ 'fraud-alerts' │         │
- │ (Postgres)      │  │   └────────┬───────┘         │
- └────────┬────────┘  │            │                 │
-          │           │ nightly    ▼                 │
-          │           │ Spark    ┌────────────┐      │
-          │           └─────────►│   Pinot    │      │
-          │           segments   │   hybrid   │      │
-          │                      │   table    │      │
-          │                      └─────┬──────┘      │
-          ▼                            │             │
-   ┌──────────────┐                    │             │
-   │   PrestoDB   │                    │             │
-   │  coordinator │                    │             │
-   └──────┬───────┘                    │             │
-          │                            │             │
-          └──────────────┬─────────────┘             │
-                         ▼                           │
-                  ┌─────────────┐                    │
-                  │   Superset  │                    │
-                  │  dashboards │                    │
-                  └─────────────┘                    │
-                                                     │
-   Analysis notebook ◄── reads /analytics/* ─────────┘
-   (path-based, no HMS, no engine — same files Spark wrote)
+ └──────┬───────┘        └──────┬───────┘
+        │                       │
+        │ saveAsTable           │ writes Kafka
+        │ + Parquet             │
+        ▼                       ▼
+ ┌─────────────────┐      ┌────────────────┐
+ │ HDFS            │      │ Kafka topics:  │
+ │ /analytics/*    │      │ 'transactions- │
+ │   +             │      │  scored'       │
+ │ HMS catalog     │      │ 'fraud-alerts' │
+ │ (Postgres)      │      └────────┬───────┘
+ └────────┬────────┘               │
+          │     nightly Spark      │
+          │     segments      ┌────┘
+          ▼                   ▼
+ ╔═══════════════════════════════════════════════╗
+ ║              SERVING LAYER                    ║
+ ║                                               ║
+ ║  ┌──────────────┐         ┌──────────────┐    ║
+ ║  │  PrestoDB    │         │    Pinot     │    ║
+ ║  │  (reads HMS  │         │   hybrid     │    ║
+ ║  │  + Parquet)  │         │   table      │    ║
+ ║  └──────────────┘         └──────────────┘    ║
+ ║         │                        │            ║
+ ╚═════════╪════════════════════════╪════════════╝
+           │                        │
+           ├────────┬───────────────┤
+           │        │               │
+           ▼        ▼               ▼
+    ┌──────────────┐         ┌──────────────┐
+    │   Superset   │         │   Analysis   │
+    │  dashboards  │         │   notebook   │
+    │ (Pinot+Presto)│        │ (Pinot+Presto)│
+    └──────────────┘         └──────────────┘
 ```
 
 Two arrows worth naming. The arrow from `customer_features` into
@@ -170,22 +173,22 @@ flowchart LR
     end
 
     %% TOP LANE — Spark batch, orchestrated by Airflow
-    subgraph batch_lane[" Spark batch — orchestrated by Airflow "]
+    subgraph batch_lane["Spark batch lane<br/>(orchestrated by Airflow)"]
         direction LR
-        subgraph landing["HDFS /landing (raw, immutable)"]
+        subgraph landing["HDFS /landing<br/>(raw, immutable)"]
             l2[customer-profiles]
             l3[merchant-directory]
             l4[device-fingerprints]
             l5[fraud-reports]
         end
-        subgraph curated["HDFS /curated (Parquet, partitioned)"]
+        subgraph curated["HDFS /curated<br/>(Parquet, partitioned)"]
             c2[customer-profiles]
             c3[merchant-directory]
             c4[device-fingerprints<br/>by device_type]
             c5[fraud-reports<br/>by fraud_type]
         end
         spark["Spark<br/>transformation<br/>(batch consumer of<br/>Kafka 'transactions'<br/>+ HDFS dims)"]
-        subgraph analytics["HDFS /analytics (Spark joins Kafka txns + HDFS dims)"]
+        subgraph analytics["HDFS /analytics<br/>(Spark joins Kafka txns + HDFS dims)"]
             a1[transactions_enriched<br/>by dt]
             a2[customer_features]
             a3[scored<br/>offline]
@@ -199,18 +202,21 @@ flowchart LR
     k2>"Kafka<br/>topic: transactions-scored"]
     k3>"Kafka<br/>topic: fraud-alerts"]
 
-    %% RIGHT — two serving engines + consumers
-    subgraph pinot["Pinot (hybrid table 'transactions_scored')"]
-        prt[real-time table<br/>from Kafka]
-        pof[offline table<br/>from HDFS Parquet]
-    end
-    subgraph dwh["DWH layer (granular Parquet)"]
-        hms[(Hive Metastore<br/>Postgres-backed catalog)]
-        presto["PrestoDB<br/>coordinator"]
+    %% RIGHT — single serving layer wrapping the two engines + consumers
+    subgraph serving["Serving layer<br/>(Pinot + Presto)"]
+        direction TB
+        subgraph pinot["Pinot hybrid table<br/>'transactions_scored'"]
+            prt[real-time table<br/>from Kafka]
+            pof[offline table<br/>from HDFS Parquet]
+        end
+        subgraph dwh["DWH layer<br/>(granular Parquet)"]
+            hms[(Hive Metastore<br/>Postgres-backed catalog)]
+            presto["PrestoDB<br/>coordinator"]
+        end
     end
     subgraph apps["Consumers"]
         ss[Superset dashboards<br/>Pinot + Presto]
-        nb[Analysis notebook<br/>offline 7 business Qs]
+        nb[Analysis notebook<br/>7 business Qs]
     end
 
     %% Dimensions: host -> /landing -> /curated -> Spark
@@ -263,14 +269,14 @@ flowchart LR
     a2 --> presto
     a3 --> presto
 
-    %% Consumers
-    a1 --> nb
-    a2 --> nb
-    a3 -->|Step 12| nb
+    %% Consumers — both Superset and the notebook query through the
+    %% serving layer; the notebook does NOT read /analytics/* path-based.
     prt --> ss
     pof --> ss
     presto -->|Step 10<br/>granular SQL| ss
     k3 -->|live alert feed| ss
+    presto -->|Step 12<br/>granular SQL| nb
+    pof -->|Step 12<br/>pre-aggregated| nb
 ```
 
 **Two things to notice in this diagram:**
@@ -328,10 +334,10 @@ the wiring.
 ```text
 4 dim .gz files  ─►  /landing  ─►  /curated  ─┐
                        (Step 1)    (Step 3)   ▼
-                                          Spark batch  ─►  /analytics  ─►  notebook
-                                              ▲           (Steps 4-6)    (Step 12)
-Kafka 'transactions'  ────────────────────────┘
-                                          (batch read by offset, Step 4)
+                                          Spark batch  ─►  /analytics  ──►  HMS  ──►  Presto  ──►  notebook
+                                              ▲           (Steps 4-6)    (Step 9b)             (Step 12)
+Kafka 'transactions'  ────────────────────────┘                            │
+                                          (batch read by offset, Step 4)   └──►  Pinot offline  ──►  notebook
 ```
 
 **What moves where:**
@@ -389,11 +395,15 @@ Kafka 'transactions'  ───────────────────�
      MB Parquet), self-contained, and PII-light. It's the bridge to
      streaming.
 
-5. **`/analytics/scored` → notebook** *(Steps 6, 12)*
+5. **`/analytics/scored` → HMS → Presto → notebook** *(Steps 6, 9b, 12)*
    - Offline scoring applies rules + (optional) ML to the enriched
-     fact and writes per-txn predictions.
-   - The notebook reads `/analytics/*` directly via PySpark to
-     answer the 7 business questions in `docs/scenario.md`.
+     fact and writes per-txn predictions; Spark `saveAsTable`
+     registers it in HMS at the same time.
+   - The notebook queries via **Presto** (granular SQL over
+     `/analytics/*`) and **Pinot** (pre-aggregated time-series for
+     trend questions) — same access pattern as Superset, just from
+     a Jupyter context. No path-based PySpark reads, so the catalog
+     stays the single source of truth for what tables exist.
 
 ## Streaming flow — walkthrough
 
@@ -604,41 +614,56 @@ To make it concrete, follow one row from `data/transactions.csv.gz`:
    uploads them — the broker switches that day to the offline path
    automatically, and any late-arriving events sent to Flink's side
    output get folded in.
-5. **Step 12 — notebook.** The analysis notebook reads
-   `/analytics/*` directly via PySpark to answer the 7 business
-   questions. It compares predicted vs confirmed fraud and
-   contributes to the "top-fraud-features" chart.
+5. **Step 12 — notebook.** The analysis notebook queries the
+   serving layer (Presto for granular SQL on `/analytics/*` via
+   HMS, Pinot for pre-aggregated trends) to answer the 7 business
+   questions. Same access pattern as Superset; the notebook never
+   reads `/analytics/*` path-based, so HMS stays the single source
+   of truth for what tables exist.
 
 Same row, two completely different consumers reading the same Kafka
 topic, two different latency profiles, one shared feature definition,
 one shared query surface in Superset. That's the design.
 
-## Three serving layers, three access patterns
+## Two serving engines, two consumers
 
-These are not redundant. Each answers a different kind of question:
+The serving layer has exactly two engines (Pinot, PrestoDB-on-HMS)
+and exactly two consumers (Superset, the analysis notebook). Both
+consumers reach both engines — every question lands on whichever
+engine fits its access pattern. No consumer reads `/analytics/*`
+path-based.
 
-- **Notebook (offline, deep)** — *"across the full 6 months, which
-  features predict fraud best? What's the PR-AUC of rule_velocity
-  vs rule_high_amount? How does fraud rate vary by customer
-  segment?"* This needs full-fidelity historical data, custom
-  Python, and the freedom to iterate on charts. Reads
-  `/analytics/scored/` and `/analytics/customer_features/` directly
-  via PySpark.
-- **Superset on Pinot (live, broad)** — *"what's the fraud rate
-  this hour by merchant category? Are alert volumes spiking right
-  now? What's the false-positive rate trending over the last 7
-  days?"* This needs sub-second latency at high concurrency, fixed
-  dashboard definitions, and seconds-fresh data. Reads the Pinot
-  hybrid table — pre-aggregated, columnar, segment-indexed.
-- **Superset on PrestoDB (granular, ad-hoc)** — *"show me every
+**The two engines:**
+
+- **Pinot (pre-aggregated, sub-second).** A hybrid table whose
+  real-time half tails Kafka `transactions-scored` and whose offline
+  half is rebuilt nightly from `/analytics/transactions_enriched/`.
+  Fixed schema, segment-indexed, columnar. Best for *"what's the
+  fraud rate this hour by merchant category?"* — high concurrency,
+  seconds-fresh.
+- **PrestoDB on HMS (granular, second-scale).** A SQL engine that
+  reads the same `/curated/*` and `/analytics/*` Parquet via the
+  Hive Metastore catalog (Spark `saveAsTable` registers the table
+  *and* writes the bytes in one call). Best for *"show me every
   transaction over $10K from device fingerprint X during March,
-  joined to merchant category and customer tenure"*. This needs
-  full row detail and arbitrary multi-table joins, but at SQL Lab
-  pace (seconds, not sub-second). Reads HDFS Parquet under
-  `/curated/*` and `/analytics/*` via the Hive Metastore catalog —
-  same data as the notebook, but accessible from Superset's SQL
-  editor and chart builder. See
-  [`docs/infrastructure/presto.md`](../infrastructure/presto.md).
+  joined to merchant category and customer tenure"* — arbitrary
+  joins, full row detail.
+
+**The two consumers:**
+
+- **Superset (canned dashboards).** Connects to both engines via
+  SQLAlchemy (`pinotdb` and `pyhive[presto]`). Real-time dashboards
+  hit Pinot; ad-hoc SQL Lab queries hit Presto.
+- **Analysis notebook (offline 7 business Qs).** Same two
+  connections, just from Jupyter / Python. Pinot for time-series
+  trend questions, Presto for granular feature-engineering and
+  joins. Never reads `/analytics/*` path-based — HMS stays the
+  single source of truth for what tables exist, so renames and
+  schema changes propagate to the notebook for free.
+
+See [`docs/infrastructure/presto.md`](../infrastructure/presto.md)
+and [`docs/infrastructure/pinot.md`](../infrastructure/pinot.md)
+for the per-engine wiring.
 
 Robinhood's "dashboard experience changed dramatically" slide is
 about *swapping Presto for Pinot* on the canned-dashboard layer —
