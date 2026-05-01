@@ -19,8 +19,9 @@ project trying to build?"** read [`docs/scenario.md`](../scenario.md).
 | [`kafka.md`](kafka.md)       | Source of truth for the `transactions` fact stream + UI         | `kafka`, `kafdrop`                                                     |
 | [`airflow.md`](airflow.md)   | Orchestrator for the nightly batch + monitoring DAGs            | `postgres`, `airflow-init`, `airflow-webserver`, `airflow-scheduler`   |
 | [`flink.md`](flink.md)       | Streaming scoring — event-time, exactly-once with Kafka         | `flink-jobmanager`, `flink-taskmanager`                                |
-| [`pinot.md`](pinot.md)       | OLAP store — hybrid table backing real-time + offline queries   | `pinot-zookeeper`, `pinot-controller`, `pinot-broker`, `pinot-server`  |
-| [`superset.md`](superset.md) | BI / dashboards on top of Pinot                                 | `superset-init`, `superset`                                            |
+| [`pinot.md`](pinot.md)       | Real-time OLAP store — pre-aggregated streaming + offline hybrid table | `pinot-zookeeper`, `pinot-controller`, `pinot-broker`, `pinot-server`  |
+| [`presto.md`](presto.md)     | DWH serving layer — granular Parquet via Hive Metastore         | `metastore-db`, `hive-metastore-init`, `hive-metastore`, `presto-coordinator` |
+| [`superset.md`](superset.md) | BI / dashboards on top of Pinot **and** Presto                  | `superset-init`, `superset`                                            |
 
 ## Port map
 
@@ -40,6 +41,7 @@ so this directory is self-contained.
 | Pinot Broker        | 8099      | 8099            | Pinot SQL query endpoint (Superset + smoke check)                |
 | Superset            | 8088      | 8088            | <http://localhost:8088> — `admin` / `admin`                      |
 | Flink Jobmanager UI | 8082      | 8081            | <http://localhost:8082> — moved off 8081 (Airflow web)           |
+| PrestoDB Coordinator| 8086      | 8080            | <http://localhost:8086> SQL + Web UI — moved off 8080 (Spark Master UI) |
 
 Three host ports collide with default container ports and are
 remapped: **Kafdrop** (9001 ← 9000) and **Pinot controller**
@@ -59,7 +61,8 @@ full `make up`.
 |-----------------|------------------------------------------|--------------------------------------------------------|
 | `make up-core`  | HDFS, Spark, Kafka                       | Working on Spark batch jobs or Kafka producers         |
 | `make up-stream`| Kafka, Flink                             | Working on the Flink streaming app                     |
-| `make up-bi`    | Pinot, Superset                          | Working on dashboards / Pinot table configs            |
+| `make up-bi`    | Pinot, Superset, HMS + Presto            | Working on dashboards or ad-hoc DWH SQL                |
+| `make up-dwh`   | Postgres-backed HMS + nothing else       | Inspecting / debugging the catalog in isolation        |
 | `make up`       | Everything (adds Airflow on top of all)  | Full integration tests, `make smoke`, demos            |
 
 Pinot needs its own ZooKeeper to come up; that's started as part of
@@ -80,6 +83,7 @@ make smoke-spark      # spark-submit a job that reads HDFS
 make smoke-airflow    # trigger smoke_dag and wait for success
 make smoke-pinot      # /health on controller + broker, instance registration
 make smoke-flink      # /overview on jobmanager + ≥ 1 taskmanager registered
+make smoke-presto     # /v1/info + hive catalog + Spark<->HMS<->Presto round-trip
 make smoke            # all of the above
 ```
 

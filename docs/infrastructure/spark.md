@@ -37,10 +37,24 @@ driven or bind-mounted:
 | Bind mount `./jobs:/opt/jobs`   | Job source code is editable on the host; submit by container path             |
 | Bind mount `./docker/hadoop-client → /opt/hadoop-conf` | Minimal client-side `core-site.xml` + `hdfs-site.xml`             |
 | Bind mount [`docker/spark/log4j2.properties`](../../docker/spark/log4j2.properties) → `/opt/spark/conf/log4j2.properties` | Suppress arm64 native-codec WARN |
+| Bind mount [`docker/spark/spark-defaults.conf`](../../docker/spark/spark-defaults.conf) → `/opt/spark/conf/spark-defaults.conf` | `spark.sql.catalogImplementation=hive` + warehouse dir, so `saveAsTable` registers in HMS |
+| Bind mount [`docker/hadoop-client/hive-site.xml`](../../docker/hadoop-client/hive-site.xml) inside `/opt/hadoop-conf` (already mounted) | Tells Spark where the Hive Metastore Thrift endpoint lives (`thrift://hive-metastore:9083`) |
 
 Spark 3.5 uses log4j**2**, not log4j1 — the file extension matters.
 The bundled image looks for `log4j2.properties` in
 `/opt/spark/conf/`; mounting at any other path silently does nothing.
+
+## Hive Metastore integration
+
+Spark sees the Hive Metastore via three pieces of plumbing:
+
+1. **`hive-site.xml`** in `docker/hadoop-client/` — `hive.metastore.uris=thrift://hive-metastore:9083`. Spark picks this up automatically because `HADOOP_CONF_DIR=/opt/hadoop-conf` already points at that directory.
+2. **`spark-defaults.conf`** — turns on `spark.sql.catalogImplementation=hive` and pins `spark.sql.warehouse.dir=hdfs://namenode:9000/warehouse` (must match `metastore.warehouse.dir` in HMS or `saveAsTable` writes Parquet to one place and HMS records another).
+3. **`--packages org.apache.spark:spark-hive_2.12:3.5.3`** at submit time — the Hive bridge JAR is *not* pre-baked into `apache/spark:3.5.3-python3` (same posture as the Kafka connector).
+
+After all three, `df.write.saveAsTable("default.foo")` writes Parquet to `hdfs://namenode:9000/warehouse/foo/` AND registers `default.foo` in HMS. Presto sees the table immediately via the `hive` catalog. See [`docs/infrastructure/presto.md`](presto.md) for the consumer side.
+
+**Path-based writes still bypass HMS.** `df.write.parquet("hdfs://...")` keeps working untouched and stays invisible to Presto. To make a path-based table queryable from Presto, register it manually with `CREATE EXTERNAL TABLE ... LOCATION 'hdfs://...'`.
 
 ## Volumes
 

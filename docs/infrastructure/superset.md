@@ -1,11 +1,11 @@
 # Superset
 
-Apache Superset is the BI / dashboard UI on top of
-[Pinot](pinot.md). It connects to the Pinot broker via the
-`pinotdb` SQLAlchemy driver, which we install at container startup
-by bind-mounting `requirements-local.txt` at the path the official
-entrypoint already pip-installs from. This sidesteps the need for
-a custom Dockerfile.
+Apache Superset is the BI / dashboard UI on top of [Pinot](pinot.md)
+**and** [PrestoDB](presto.md). It connects to both via SQLAlchemy
+drivers (`pinotdb` for Pinot, `pyhive[presto]` for Presto), installed
+at container startup by bind-mounting `requirements-local.txt` at the
+path the official entrypoint already pip-installs from. This
+sidesteps the need for a custom Dockerfile.
 
 The two-container split (`superset-init` one-shot + `superset`
 long-running) mirrors the [Airflow](airflow.md) pattern.
@@ -110,12 +110,19 @@ service depends on `service_completed_successfully`).
   upstream source repo). Our minimal versions live in
   [`docker/superset/`](../../docker/superset/) and bind-mount
   into the container.
-- **Connection to Pinot is dataset-config UI work, not container
+- **Database connections are dataset-config UI work, not container
   config.** After the stack is up, Superset → *Settings → Database
-  Connections → +Database* with URI
-  `pinot+http://pinot-broker:8099/query/sql?controller=http://pinot-controller:9000`.
-  This isn't in compose because Superset stores DB connections in
-  its metadata DB, not env vars.
+  Connections → +Database* with one of:
+
+  | Target  | SQLAlchemy URI                                                                            |
+  |---------|--------------------------------------------------------------------------------------------|
+  | Pinot   | `pinot+http://pinot-broker:8099/query/sql?controller=http://pinot-controller:9000`          |
+  | Presto  | `presto://presto-coordinator:8080/hive/default`                                             |
+
+  Both use **in-network ports** (`8099`, `8080`) — Superset is in
+  the same docker network as Pinot and Presto, so the host port
+  remaps don't apply. Connections aren't in compose because Superset
+  stores DB connections in its metadata DB, not env vars.
 
 ## Alternatives
 

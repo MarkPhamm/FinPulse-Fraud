@@ -12,6 +12,11 @@ pattern](../odsc/robinhood_infrastructure.md) — see
 [`docs/plans/dataflow.md`](../plans/dataflow.md) for the full data
 flow.
 
+Pinot serves the **pre-aggregated streaming** access pattern;
+[`presto.md`](presto.md) covers the complementary **granular
+ad-hoc** access pattern over the same HDFS data lake. Two engines,
+two roles.
+
 Pinot is also why we ship a **dedicated ZooKeeper** in this stack.
 
 ## Topology
@@ -158,7 +163,7 @@ Where Pinot sits in the OLAP / real-time analytics landscape:
 | **Apache Druid**             | Closest peer (Metamarkets, 2011) | Almost interchangeable for this workload. Druid has stronger time-series ergonomics and a longer track record; Pinot has better star-schema joins (since 1.0) and faster real-time ingestion of high-cardinality data. Robinhood picked Pinot — that's why we did. |
 | **ClickHouse**               | Open-source columnar DB          | Single-node performance is exceptional. Different model — regular DB tables, not segment-based with a hybrid real-time/offline split. Real-time Kafka ingestion is younger.                                  |
 | **Apache Doris / StarRocks** | Newer OLAP engines               | MySQL-protocol compatible, growing fast, similar real-time + batch shape. Worth evaluating for greenfield. |
-| **Trino + ORC/Parquet on S3**| Federated query                  | Read-only ad-hoc analytics over a data lake. No real-time path; query latency is seconds-to-minutes.    |
+| **Trino / PrestoDB + Parquet on HDFS** | Federated query        | Read-only ad-hoc analytics over a data lake. No real-time path; query latency is seconds-to-minutes. **In-stack as PrestoDB — see [`presto.md`](presto.md).** |
 | **Snowflake / BigQuery**     | Cloud warehouses                 | Batch-oriented historical analytics. No sub-second freshness; cost model is pay-per-query.              |
 | **Apache Kylin**             | OLAP cube precomputation         | You want aggressive precompute (cube model). Less flexible queries, more storage cost.                  |
 | **DuckDB**                   | Embedded analytical DB           | Tiny scale, single-process, notebook analytics. Not a real-time multi-user serving layer.               |
@@ -169,6 +174,13 @@ table reconciled from a warehouse, fronted by a hybrid broker*.
 Druid is the older, more mature option; Pinot has been catching up
 fast on joins and SQL ergonomics. ClickHouse is the most credible
 challenger in the broader category but has a different mental model.
+
+**Pinot vs Presto is *not* the real choice — they coexist.** Pinot
+answers "what is the click-through rate by network in the last 5
+minutes?" in sub-second time on rolled-up segments. Presto answers
+"show me every transaction over $10K from device fingerprint X
+during March" by scanning raw Parquet. Same data lake, two access
+patterns. See [`presto.md`](presto.md) for the granular path.
 
 ## Hybrid table conventions
 

@@ -6,14 +6,14 @@ See [`docs/scenario.md`](docs/scenario.md) for the project brief.
 ## Layout
 
 ```text
-docker-compose.yml   # HDFS + Spark + Kafka + Airflow + Pinot + Superset + Flink
+docker-compose.yml   # HDFS + Spark + Kafka + Airflow + Pinot + Superset + Flink + HMS + PrestoDB
 Makefile             # up / down / logs / smoke / nuke
 plan.md              # End-to-end build plan, 10 small steps
 .env.example         # Optional pip add-ons for Airflow
 
 airflow/             # DAGs, plugins, task logs
 data/                # Source datasets (gzipped CSV / JSON)
-docker/              # Bind-mounted config for Hadoop, Spark, Superset, Flink
+docker/              # Bind-mounted config for Hadoop, Spark, Superset, Flink, HMS, Presto
 docs/                # scenario.md (brief), infrastructure/ (per-container ref), plans/ (dataflow + plan)
 jobs/                # Spark jobs (batch curate / enrich on HDFS Parquet)
 notebooks/           # Analysis notebooks answering the 7 business questions
@@ -25,7 +25,7 @@ utils/               # Standalone CLI utilities (Pinot schema loaders, ad-hoc Ka
 
 Per-service reference (image, ports, volumes, configuration, caveats) lives
 under [`docs/infrastructure/`](docs/infrastructure/index.md) — one doc per
-component (HDFS, Spark, Kafka, Airflow, Pinot, Superset, Flink).
+component (HDFS, Spark, Kafka, Airflow, Pinot, **PrestoDB**, Superset, Flink).
 
 ## Service map
 
@@ -42,6 +42,7 @@ component (HDFS, Spark, Kafka, Airflow, Pinot, Superset, Flink).
 | Pinot Broker        | 8099      | 8099            | Pinot SQL query endpoint (used by Superset + smoke check)        |
 | Superset            | 8088      | 8088            | <http://localhost:8088> — `admin` / `admin`                      |
 | Flink Jobmanager UI | 8082      | 8081            | <http://localhost:8082> (moved off 8081 to avoid Airflow clash)  |
+| PrestoDB Coordinator| 8086      | 8080            | <http://localhost:8086> SQL + Web UI (moved off 8080 to avoid Spark clash) |
 
 Spark runs as **1 master + 2 workers** (2 cores, 2 GB each) so the
 nightly Airflow DAG can run two batch jobs in parallel (e.g.
@@ -49,35 +50,51 @@ nightly Airflow DAG can run two batch jobs in parallel (e.g.
 runs on Flink (1 jobmanager + 1 taskmanager, 4 task slots). HDFS runs
 as **1 NameNode + 2 DataNodes** so replication > 1 is actually exercised.
 
+The serving layer is **two engines, two roles**: Pinot for the
+*pre-aggregated streaming* `transactions_scored` hybrid table
+(sub-second on a fixed schema), and PrestoDB-on-HMS for *ad-hoc SQL
+over granular Parquet* in HDFS (second-scale, arbitrary joins).
+Superset connects to both. See
+[`docs/infrastructure/presto.md`](docs/infrastructure/presto.md).
+
 ## Prerequisites
 
-- Docker Desktop with **≥ 16 GB RAM, 4+ CPUs** allocated. Full stack
-  resident is ~12 GB (the Pinot quartet + Superset add ~3 GB on top of the
-  original HDFS+Spark+Kafka+Airflow set).
+- Docker Desktop with **≥ 10 GB RAM, 4+ CPUs** allocated (12 GB
+  recommended for headroom). The full stack idles around ~7 GB
+  resident; `make smoke` adds a transient ~1 GB Spark surge. Below
+  10 GB the kernel OOM-kills Presto when Spark's smoke job spawns
+  an executor — observed empirically. To bump: Docker Desktop →
+  Settings → Resources → Memory.
 - Apple Silicon and amd64 both supported (all images are multi-arch).
+  PrestoDB prints *"Support for the ARM architecture is experimental"*
+  on arm64 — advisory, not a failure.
 
 ## First-time bring-up
 
 ```sh
 make env                # one-time: copy .env.example -> .env
-docker compose pull     # ~5 GB of images, one-time
+make hive-deps          # one-time: download Postgres JDBC driver (~1.2 MB) for HMS
+docker compose pull     # ~6 GB of images, one-time
 make up                 # ~60-90s until everything is healthy
-make smoke              # HDFS round-trip + Kafka produce/consume + Spark->HDFS job
-make smoke-airflow      # trigger smoke_dag and wait for success
+make smoke              # every smoke check (HDFS / Kafka / Spark / Airflow / Pinot / Flink / Presto)
 ```
 
 ## Common targets
 
-| Target                   | What it does                                                |
-|--------------------------|-------------------------------------------------------------|
-| `make up`                | Start the full stack                                        |
-| `make up-core`           | HDFS + Spark + Kafka only (skip Airflow)                    |
-| `make down`              | Stop containers, keep volumes                               |
-| `make nuke`              | Stop **and delete** all volumes (HDFS / Kafka / Postgres)   |
-| `make ps`                | Show running services                                       |
-| `make logs s=<service>`  | Tail logs for one service, e.g. `make logs s=namenode`      |
-| `make smoke`             | Run HDFS + Kafka + Spark smoke checks                       |
-| `make smoke-airflow`     | Trigger the smoke DAG and wait for `success`                |
+| Target                   | What it does                                                                 |
+|--------------------------|------------------------------------------------------------------------------|
+| `make up`                | Start the full stack                                                         |
+| `make up-core`           | HDFS + Spark + Kafka only (skip Airflow)                                     |
+| `make up-bi`             | Pinot + Superset + HMS + Presto (skip everything else)                       |
+| `make up-dwh`            | Just the HMS stack (Postgres + hive-metastore-init + hive-metastore)         |
+| `make hive-deps`         | One-time: download Postgres JDBC driver to `docker/hive-metastore/jars/`     |
+| `make down`              | Stop containers, keep volumes                                                |
+| `make nuke`              | Stop **and delete** all volumes (HDFS / Kafka / Postgres / HMS / Pinot / …)  |
+| `make ps`                | Show running services                                                        |
+| `make logs s=<service>`  | Tail logs for one service, e.g. `make logs s=namenode`                       |
+| `make smoke`             | Every smoke check: HDFS / Kafka / Spark / Airflow / Pinot / Flink / Presto    |
+| `make smoke-airflow`     | Trigger the smoke DAG and wait for `success`                                  |
+| `make smoke-presto`      | Spark `saveAsTable` -> HMS -> Presto SQL round-trip                           |
 
 ## Data
 

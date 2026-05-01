@@ -96,8 +96,10 @@ dump.
 Two lanes flowing left → right. The top lane is the **Spark batch
 path orchestrated by Airflow** (HDFS dim landing → curate →
 transformation → analytics outputs). The bottom lane is the
-**streaming path** (Kafka producer → Flink → Kafka). Both converge
-at Pinot's hybrid table, which fans out to Superset and notebooks.
+**streaming path** (Kafka producer → Flink → Kafka). On the right
+the data fans out to **two serving engines** — Pinot for
+pre-aggregated streaming dashboards, PrestoDB-on-HMS for granular
+ad-hoc SQL — and from there to Superset and notebooks.
 
 ```mermaid
 flowchart LR
@@ -140,13 +142,17 @@ flowchart LR
     k2>"Kafka<br/>topic: transactions-scored"]
     k3>"Kafka<br/>topic: fraud-alerts"]
 
-    %% RIGHT — Pinot + consumers
+    %% RIGHT — two serving engines + consumers
     subgraph pinot["Pinot (hybrid table 'transactions_scored')"]
         prt[real-time table<br/>from Kafka]
         pof[offline table<br/>from HDFS Parquet]
     end
+    subgraph dwh["DWH layer (granular Parquet)"]
+        hms[(Hive Metastore<br/>Postgres-backed catalog)]
+        presto["PrestoDB<br/>coordinator"]
+    end
     subgraph apps["Consumers"]
-        ss[Superset dashboards<br/>real-time + historical]
+        ss[Superset dashboards<br/>Pinot + Presto]
         nb[Analysis notebook<br/>offline 7 business Qs]
     end
 
@@ -187,12 +193,26 @@ flowchart LR
     k2 -->|Step 9<br/>real-time ingest| prt
     a1 -->|Step 9<br/>nightly Spark<br/>segments| pof
 
+    %% HMS catalog: Spark saveAsTable registers /curated and /analytics
+    %% tables; Presto reads them via the Hive connector. Bytes still
+    %% live in HDFS.
+    spark -.->|Step 9b<br/>saveAsTable<br/>over Thrift| hms
+    hms --> presto
+    c2 --> presto
+    c3 --> presto
+    c4 --> presto
+    c5 --> presto
+    a1 --> presto
+    a2 --> presto
+    a3 --> presto
+
     %% Consumers
     a1 --> nb
     a2 --> nb
     a3 -->|Step 12| nb
     prt --> ss
     pof --> ss
+    presto -->|Step 10<br/>granular SQL| ss
     k3 -->|live alert feed| ss
 ```
 
@@ -234,6 +254,17 @@ unions them at query time — yesterday and earlier comes from the
 reconciled offline segments, today comes from the real-time table.
 Superset queries the logical hybrid table; it does not need to know
 which physical path served any given row.
+
+The **DWH box (HMS + PrestoDB)** is the second serving engine. It
+reads the same `/curated/*` and `/analytics/*` Parquet that the
+notebook reads, but routed through a *catalog* (HMS, dotted line
+from Spark) rather than path-based access. Spark's `saveAsTable`
+writes the bytes *and* registers the table in HMS in one call;
+Presto discovers tables by querying HMS's Thrift API. Bytes still
+live in HDFS — three concerns, three independent components:
+storage, catalog, engine. See
+[`docs/infrastructure/presto.md`](../infrastructure/presto.md) for
+the wiring.
 
 ## Batch flow — walkthrough
 
@@ -525,27 +556,41 @@ Same row, two completely different consumers reading the same Kafka
 topic, two different latency profiles, one shared feature definition,
 one shared query surface in Superset. That's the design.
 
-## A note on Pinot's role vs the analysis notebook
+## Three serving layers, three access patterns
 
 These are not redundant. Each answers a different kind of question:
 
-- **Notebook (offline, deep)** — "across the full 6 months, which
+- **Notebook (offline, deep)** — *"across the full 6 months, which
   features predict fraud best? What's the PR-AUC of rule_velocity
   vs rule_high_amount? How does fraud rate vary by customer
-  segment?" This needs full-fidelity historical data, custom Python,
-  and the freedom to iterate on charts. Reads
+  segment?"* This needs full-fidelity historical data, custom
+  Python, and the freedom to iterate on charts. Reads
   `/analytics/scored/` and `/analytics/customer_features/` directly
   via PySpark.
-- **Superset on Pinot (live, broad)** — "what's the fraud rate this
-  hour by merchant category? Are alert volumes spiking right now?
-  What's the false-positive rate trending over the last 7 days?"
-  This needs sub-second latency at high concurrency, fixed dashboard
-  definitions, and seconds-fresh data. Reads the Pinot hybrid table.
+- **Superset on Pinot (live, broad)** — *"what's the fraud rate
+  this hour by merchant category? Are alert volumes spiking right
+  now? What's the false-positive rate trending over the last 7
+  days?"* This needs sub-second latency at high concurrency, fixed
+  dashboard definitions, and seconds-fresh data. Reads the Pinot
+  hybrid table — pre-aggregated, columnar, segment-indexed.
+- **Superset on PrestoDB (granular, ad-hoc)** — *"show me every
+  transaction over $10K from device fingerprint X during March,
+  joined to merchant category and customer tenure"*. This needs
+  full row detail and arbitrary multi-table joins, but at SQL Lab
+  pace (seconds, not sub-second). Reads HDFS Parquet under
+  `/curated/*` and `/analytics/*` via the Hive Metastore catalog —
+  same data as the notebook, but accessible from Superset's SQL
+  editor and chart builder. See
+  [`docs/infrastructure/presto.md`](../infrastructure/presto.md).
 
-Robinhood's "dashboard experience changed dramatically" slide is the
-short version: Looker/Presto on a Hadoop warehouse → Superset on
-Pinot took dashboard p95 from 58s to 800ms and freshness from T+24h
-to ~5s. We're building the same shape at toy scale.
+Robinhood's "dashboard experience changed dramatically" slide is
+about *swapping Presto for Pinot* on the canned-dashboard layer —
+Looker/Presto on a Hadoop warehouse → Superset on Pinot took
+dashboard p95 from 58s to 800ms and freshness from T+24h to ~5s. We
+honour that lesson: Pinot owns canned dashboards. But Presto is back
+in the stack for the *granular ad-hoc* role it's actually best at —
+slicing raw rows from the data lake without a fixed schema. Two
+different jobs, two engines, one data lake.
 
 ## See also
 

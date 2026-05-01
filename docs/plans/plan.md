@@ -13,10 +13,15 @@ make smoke-pinot && make smoke-flink` all pass. The full local stack is:
   `fraud-alerts`.
 - **Flink** (1 jobmanager + 1 taskmanager, 4 slots) — streaming consumer
   of Kafka `transactions`, writes scored events back to Kafka.
-- **Pinot** (zookeeper + controller + broker + server) — OLAP serving
-  layer; will host the `transactions_scored` hybrid table (real-time
-  from Kafka + offline from HDFS).
-- **Superset** — BI front-end on Pinot via the `pinotdb` SQLAlchemy driver.
+- **Pinot** (zookeeper + controller + broker + server) — real-time OLAP
+  serving layer; will host the `transactions_scored` hybrid table
+  (pre-aggregated, real-time from Kafka + offline from HDFS).
+- **Hive Metastore + PrestoDB** (`metastore-db` + `hive-metastore` +
+  `presto-coordinator`) — DWH serving layer for the *granular* Parquet
+  in `/curated/*` and `/analytics/*`. Spark `saveAsTable` registers
+  tables in HMS over Thrift; Presto reads them via the Hive connector.
+- **Superset** — BI front-end on Pinot (`pinotdb`) **and** Presto
+  (`pyhive[presto]`) via two separate SQLAlchemy drivers.
 - **Airflow** (LocalExecutor) — orchestrates the daily Spark batch DAG and
   monitors the long-running Flink job.
 
@@ -32,14 +37,16 @@ quality, and dollar-impact framing** — not pure accuracy.
 
 This plan turns that brief into 12 small, observable steps so each new
 concept lands one at a time. Steps 1–8 + 11–12 implement the four
-stages; Steps 9–10 add a Pinot + Superset analytics-serving layer
-(per the Robinhood pattern in
-[`docs/odsc/robinhood_infrastructure.md`](../odsc/robinhood_infrastructure.md))
-that the brief doesn't strictly require but makes the real-time
-architecture credit easier to demonstrate. Every step ends with
-something runnable and a single command to verify it. The end-to-end
-shape lives in [`docs/plans/dataflow.md`](dataflow.md) — read that
-diagram before starting any step.
+stages; Steps 9–10 add **two complementary serving layers** — Pinot
+for pre-aggregated streaming, PrestoDB-on-HMS for granular ad-hoc —
+plus Superset on top of both (per the Robinhood pattern in
+[`docs/odsc/robinhood_infrastructure.md`](../odsc/robinhood_infrastructure.md)).
+Neither serving layer is strictly required by the brief, but together
+they make the real-time architecture credit easier to demonstrate and
+let the analysis notebook share a catalog with the dashboards. Every
+step ends with something runnable and a single command to verify it.
+The end-to-end shape lives in [`docs/plans/dataflow.md`](dataflow.md) —
+read that diagram before starting any step.
 
 **Conventions used throughout the steps:**
 
@@ -60,8 +67,15 @@ diagram before starting any step.
 - Pinot tables are registered via `POST /schemas` and `POST /tables`
   against `http://pinot-controller:9000` (or host port 9100). Schema +
   tableconfig JSONs land under `utils/pinot/`.
+- Hive tables that Presto should see are written by Spark with
+  `df.write.saveAsTable("<schema>.<name>")` rather than path-based
+  `df.write.parquet(...)` — `saveAsTable` registers the table in HMS
+  in the same step. Use `--packages org.apache.spark:spark-hive_2.12:3.5.3`
+  on the `spark-submit` (the Hive bridge JAR is not pre-baked, same
+  posture as the Kafka connector).
 - Superset reads Pinot via SQLAlchemy URL
-  `pinot://pinot-broker:8099/query/sql?controller=http://pinot-controller:9000`.
+  `pinot://pinot-broker:8099/query/sql?controller=http://pinot-controller:9000`,
+  and Presto via `presto://presto-coordinator:8080/hive/default`.
 - Each step writes its outputs at known paths so the next step can read
   them; if you re-run the whole pipeline from scratch,
   `make nuke && make up` wipes all named volumes (HDFS / Kafka / Pinot
@@ -83,7 +97,8 @@ diagram before starting any step.
 | 7    | Kafka producer replaying CSV → `transactions`                                   | partition keys, replay modes               |
 | 8    | **Flink** `stream_score` → Kafka `transactions-scored` / `fraud-alerts`         | event-time, watermarks, broadcast state, exactly-once |
 | 9    | Pinot **hybrid table** (`transactions_scored`): real-time from Kafka + offline from HDFS | OLAP segments, hybrid tables, deep store   |
-| 10   | Superset dashboards on the Pinot hybrid table                                   | BI on OLAP, real-time charts               |
+| 9b   | HMS-registered Hive tables for `/curated/*` + `/analytics/*`; Presto serves them | catalog vs storage vs engine separation, lakehouse pattern |
+| 10   | Superset dashboards on the Pinot hybrid table **and** Presto Hive tables        | BI on two engines, picking one per question |
 | 11   | `daily_batch` + `streaming_monitor` DAGs                                        | quality gates, BashOperator pattern        |
 | 12   | `notebooks/analysis.ipynb` answering the 7 business questions                   | $-impact framing                           |
 
@@ -96,23 +111,40 @@ analytics outputs.
 
 **Suggested execution order.** Steps don't strictly need to follow
 the numbered order, but a dependency-respecting sequence is:
-`1 → 3 → 7 → 4 → 5 → 6 → 8 → 9 → 10 → 11 → 12`. Step 7 (producer)
+`1 → 3 → 7 → 4 → 5 → 6 → 8 → 9 → 9b → 10 → 11 → 12`. Step 7 (producer)
 must run before Step 4 (Spark batch read of Kafka) so the topic has
-data to consume.
+data to consume. Step 9b can in principle run any time after Step 6,
+but is most useful right before Step 10 so Superset has *both*
+serving layers wired in one pass.
 
 ---
 
 ## Step 0 — Infrastructure (DONE)
 
 What exists today: `make up` brings the full stack to healthy in ~90s;
-`make smoke` exercises HDFS, Kafka, and Spark end-to-end;
-`make smoke-airflow` triggers a trivial DAG and waits for success.
+`make smoke` exercises HDFS, Kafka, Spark, Airflow, Pinot, Flink **and
+the Spark→HMS→Presto round-trip** end-to-end (`make smoke-presto`).
+
+The Hive Metastore + PrestoDB serving layer is part of the base infra:
+`metastore-db` (Postgres backing the catalog), `hive-metastore-init`
+(one-shot `schematool -initSchema`), `hive-metastore` (long-running
+Thrift on `:9083`), and `presto-coordinator` (host port 8086 → 8080).
+See [`docs/infrastructure/presto.md`](../infrastructure/presto.md) for
+the full topology.
+
+**One-time host setup before first `make up`:**
+
+```sh
+make hive-deps       # ~1.2 MB Postgres JDBC driver into docker/hive-metastore/jars/
+                     # apache/hive:4.0.0 doesn't bundle this — same posture as the
+                     # spark-sql-kafka --packages flow.
+```
 
 **Verify before starting Step 1:**
 
 ```sh
 make ps              # all services should be Up / healthy
-make smoke           # HDFS round-trip + Kafka + Spark smoke job
+make smoke           # every smoke check end-to-end
 ```
 
 If anything is red, fix it first — every later step assumes this baseline.
@@ -678,11 +710,123 @@ curl -fsS -X POST http://localhost:8099/query/sql \
 
 ---
 
-## Step 10 — Superset dashboards on Pinot
+## Step 9b — Register the granular Hive tables for Presto
 
-**Goal.** Bring Superset up, wire it to the Pinot hybrid table from
-Step 9, and build three dashboards that each exercise a different
-property of the architecture.
+**Goal.** Make every dataset in `/curated/*` and `/analytics/*`
+queryable from Presto by registering it in the Hive Metastore.
+Pinot's hybrid table from Step 9 covers *pre-aggregated* questions;
+this step covers *granular ad-hoc SQL* over the same data lake — full
+row detail, arbitrary joins, second-scale latency. Same data, second
+access pattern.
+
+**Why this is its own step, not folded into 3–6.** Conceptually it's
+two extra characters per Spark write (`saveAsTable` instead of
+`parquet`), but it introduces a concept worth landing on its own:
+**catalog vs storage vs engine** are three independent concerns.
+Spark writes Parquet bytes (storage); HMS records what the table is
+called and where it lives (catalog); Presto queries it (engine).
+Each piece is swappable. Once that mental model is in place,
+extending it to other tables is mechanical.
+
+**Concepts.**
+
+- **`saveAsTable` vs `parquet`.** Path-based writes
+  (`df.write.parquet("hdfs://.../foo")`) put bytes on HDFS but tell
+  HMS nothing — Presto can't see them. `df.write.saveAsTable("default.foo")`
+  writes the same bytes *and* registers `default.foo` in HMS in the
+  same step.
+- **Managed vs external tables.** `saveAsTable` defaults to a
+  *managed* table (HMS owns the lifecycle; `DROP TABLE` deletes the
+  Parquet too). For tables that already exist as path-based Parquet
+  from earlier steps, register them as *external* tables instead:
+  `CREATE EXTERNAL TABLE foo (...) WITH (external_location='hdfs://.../foo/', format='PARQUET')`
+  in Presto, or `df.write.option("path", "hdfs://...").saveAsTable("foo")`
+  in Spark. External tables decouple HMS from storage so a `DROP`
+  removes the catalog entry only.
+- **Hive bridge JAR.** The Spark image doesn't pre-bake `spark-hive`,
+  same posture as the Kafka connector — pass `--packages org.apache.spark:spark-hive_2.12:3.5.3`
+  on every `spark-submit` that calls `saveAsTable` or
+  `enableHiveSupport()`.
+- **Path consistency.** `spark.sql.warehouse.dir` (in
+  `docker/spark/spark-defaults.conf`) and `metastore.warehouse.dir`
+  (in `docker/hive-metastore/metastore-site.xml`) must agree on
+  `hdfs://namenode:9000/warehouse` or `saveAsTable` writes to one
+  place and HMS records another. Both already point at the right
+  path; don't change one without the other.
+
+**What to build.**
+
+There are two flavours of work, depending on whether each Spark job
+already exists.
+
+For *new* jobs in Steps 3–6, prefer `saveAsTable` from the start:
+
+```python
+spark = SparkSession.builder.enableHiveSupport().getOrCreate()
+spark.sql("CREATE DATABASE IF NOT EXISTS curated")
+df.write.mode("overwrite").saveAsTable("curated.customer_profiles")
+```
+
+For *existing* path-based outputs that you don't want to rewrite, add
+`utils/presto/register_external_tables.sql` that runs once via the
+Presto CLI:
+
+```sql
+CREATE SCHEMA IF NOT EXISTS hive.curated;
+CREATE TABLE IF NOT EXISTS hive.curated.customer_profiles (
+    card_id VARCHAR, home_country VARCHAR, avg_monthly_spend DOUBLE,
+    typical_categories ARRAY<VARCHAR>, ...
+) WITH (
+    external_location = 'hdfs://namenode:9000/curated/customer-profiles/',
+    format = 'PARQUET'
+);
+-- Repeat for /curated/{merchant-directory,device-fingerprints,fraud-reports}
+-- and /analytics/{transactions_enriched,customer_features,scored}.
+```
+
+Run via:
+
+```sh
+docker compose exec -T presto-coordinator /opt/presto-cli \
+    --catalog hive < utils/presto/register_external_tables.sql
+```
+
+**Verify.**
+
+```sh
+# Tables should now show up under both schemas.
+docker compose exec presto-coordinator /opt/presto-cli \
+    --catalog hive --execute 'SHOW SCHEMAS'
+docker compose exec presto-coordinator /opt/presto-cli \
+    --catalog hive --schema curated --execute 'SHOW TABLES'
+
+# A single granular query should join three tables and finish in
+# seconds-scale latency.
+docker compose exec presto-coordinator /opt/presto-cli \
+    --catalog hive --execute "
+SELECT m.merchant_category, count(*) AS txn_count
+FROM analytics.transactions_enriched t
+JOIN curated.merchant_directory m ON t.merchant_id = m.merchant_id
+WHERE t.dt = '2025-03-14'
+GROUP BY m.merchant_category
+ORDER BY txn_count DESC
+LIMIT 10
+"
+```
+
+The same query through Pinot would either fail (no row-level join)
+or require a precomputed aggregate. That's the access-pattern split
+between the two engines in one verification.
+
+---
+
+## Step 10 — Superset dashboards on Pinot and Presto
+
+**Goal.** Bring Superset up, wire it to **both** serving layers — the
+Pinot hybrid table from Step 9 *and* the Hive tables registered with
+HMS in Step 9b — and build three dashboards that exercise the
+architecture. Step 9b's split (pre-aggregated streaming vs granular
+ad-hoc) determines which database each chart targets.
 
 ### 10a — Spin up Superset and confirm it's healthy
 
@@ -716,46 +860,44 @@ container will not start (compose `service_completed_successfully`
 gate). Common causes: `pinotdb` install failure (network), corrupt
 SQLite metadata DB on the named volume (`make nuke` to wipe).
 
-### 10b — Wire Superset to the Pinot hybrid table
+### 10b — Wire Superset to both serving layers
 
-Once Superset is healthy:
+Once Superset is healthy, register **two** databases — one per engine.
 
 1. Open <http://localhost:8088>. Login `admin` / `admin` (set in
    `superset_config.py` via the `ADMIN_*` env vars on `superset-init`).
-2. **Settings → Database Connections → + Database**.
-3. Pick **Other** in the dropdown. SQLAlchemy URI:
+2. **Settings → Database Connections → + Database** twice — once for
+   each engine. Pick **Other** in the dropdown for both.
 
-   ```text
-   pinot://pinot-broker:8099/query/sql?controller=http://pinot-controller:9000
-   ```
+   | Display name        | SQLAlchemy URI                                                                   | Driver         |
+   |---------------------|----------------------------------------------------------------------------------|----------------|
+   | `Pinot — finpulse`  | `pinot://pinot-broker:8099/query/sql?controller=http://pinot-controller:9000`    | `pinotdb`      |
+   | `Presto — finpulse` | `presto://presto-coordinator:8080/hive/default`                                  | `pyhive[presto]` |
 
-   Display name: `Pinot — finpulse`. Click **Test Connection** — must
-   say "Connection looks good!" before saving. (If it fails, the
-   `pinotdb` driver is most likely missing — check
-   `docker compose logs superset | grep pinotdb`.)
-4. **Datasets → + Dataset**. Database = `Pinot — finpulse`,
-   schema = `default`, table = `transactions_scored`. This is the
-   logical hybrid name from Step 9 — Superset queries it; Pinot's
-   broker picks between the real-time and offline physical tables.
-5. Confirm the dataset preview returns rows (run the producer briefly
-   if you want fresh data).
+   Both URIs use **in-network ports** (`8099`, `8080`) — Superset is
+   on the same docker network, so the host port remaps don't apply.
+   Click **Test Connection** on each — both must say "Connection
+   looks good!" before saving. (If one fails, check
+   `docker compose logs superset | grep -E 'pinotdb|pyhive'` —
+   missing driver is the usual cause.)
+3. **Datasets → + Dataset**. Add at minimum:
+   - Database = `Pinot — finpulse`, schema = `default`,
+     table = `transactions_scored` (logical hybrid name from Step 9).
+   - Database = `Presto — finpulse`, schema = `analytics`,
+     table = `transactions_enriched` (registered in Step 9b).
+4. Confirm both dataset previews return rows (run the producer
+   briefly if you want fresh data on the Pinot side).
 
 ### 10c — Build the three dashboards
 
-Each dashboard is chosen to exercise a different part of the hybrid
-table:
+Each dashboard is chosen to exercise a different part of the
+architecture; the database column says which engine it should hit.
 
-1. **Live fraud-rate monitor** — `count(*) FILTER (WHERE risk_score >= 2)
-   / count(*)` over the last 60 min, refreshed every 10 s. Exercises
-   the real-time path; the chart updates within seconds of producer
-   replay.
-2. **Per-rule false-positive analysis** — joins `triggered_rules` array
-   against `confirmed_fraud` from the offline path, breaks down
-   precision per rule. Exercises the offline path and the audit-grade
-   labels that aren't available in real-time.
-3. **Alert ticker** — a list view filtered to `risk_score >= 2`. Could
-   alternately be a second Pinot real-time table on `fraud-alerts`,
-   but reusing the existing table is one fewer thing to manage.
+| # | Dashboard                              | Database                | Why this engine                                                            |
+|---|----------------------------------------|-------------------------|----------------------------------------------------------------------------|
+| 1 | **Live fraud-rate monitor**            | Pinot — `transactions_scored` | `count(*) FILTER (...) / count(*)` over the last 60 min, refreshed every 10s. Sub-second on a fixed schema is exactly what Pinot's pre-aggregated segments are for. |
+| 2 | **Per-rule false-positive analysis**   | Pinot — `transactions_scored` | Breaks down precision per rule using the offline path's audit-grade `confirmed_fraud` label. Still a fixed-schema slice — Pinot wins. |
+| 3 | **Cross-segment fraud breakdown**      | Presto — `analytics.transactions_enriched` joined with `curated.merchant_directory`, `curated.customer_profiles` | Free-form joins across three tables, drill-down by merchant category × home country × channel. Pinot's joins are limited; Presto reads the granular Parquet directly. |
 
 Export each dashboard to JSON under `docker/superset/dashboards/`
 (Settings → Dashboards → ⋮ → Export) so they can be re-imported on a
@@ -918,7 +1060,7 @@ Mapping back to the rubric in `docs/scenario.md`:
 | Stage 2 — Spark Batch | Steps 4, 5, 6 |
 | Stage 3 — Streaming | Steps 7, 8 (Flink Kafka→Kafka), 9 (Pinot real-time ingest) |
 | Stage 4 — Orchestration | Step 11 |
-| Real-time analytics serving | Steps 9 (Pinot hybrid table), 10 (Superset) |
+| Real-time analytics serving | Steps 9 (Pinot hybrid table), 9b (Presto-on-HMS for granular SQL), 10 (Superset on both) |
 | Feature engineering depth | Step 5 (creativity), Step 6 (rules), Step 12 (analysis) |
 | Class-imbalance awareness | Step 6 (PR-AUC, threshold tuning), Step 12 (visuals) |
 | Real-time architecture | Step 8 (event-time, watermark, broadcast state, exactly-once), Step 9 (hybrid tables) |
