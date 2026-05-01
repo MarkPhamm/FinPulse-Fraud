@@ -7,7 +7,7 @@ make smoke-pinot && make smoke-flink` all pass. The full local stack is:
 
 - **HDFS** (1 NameNode + 2 DataNodes) — dim landing + Spark analytics outputs.
 - **Spark** (1 master + 2 workers) — batch consumer of Kafka `transactions`
-  + HDFS dim joins + Pinot offline-segment generation.
+  - HDFS dim joins + Pinot offline-segment generation.
 - **Kafka** (single broker, KRaft) — source of truth for the transaction
   fact stream. Three topics: `transactions`, `transactions-scored`,
   `fraud-alerts`.
@@ -680,9 +680,70 @@ curl -fsS -X POST http://localhost:8099/query/sql \
 
 ## Step 10 — Superset dashboards on Pinot
 
-**Goal.** Three Superset dashboards reading the Pinot hybrid table
-`transactions_scored`, each chosen to show off a different property
-of the architecture:
+**Goal.** Bring Superset up, wire it to the Pinot hybrid table from
+Step 9, and build three dashboards that each exercise a different
+property of the architecture.
+
+### 10a — Spin up Superset and confirm it's healthy
+
+Superset itself comes up as part of `make up` (containers
+`superset-init` runs once → `superset` long-lived gunicorn). On a
+*fresh* volume the first start takes longer because:
+
+- The `superset-init` script (`docker/superset/superset-init.sh`)
+  runs `pip install -r /app/docker/requirements-local.txt` (installs
+  `pinotdb`), then `superset db upgrade`, `superset fab create-admin`,
+  `superset init`. ~30–60 s.
+- The `superset` container's bootstrap re-runs the same `pip install`
+  on every start (site-packages live in the image fs, not a named
+  volume), then `exec`s `run-server.sh` (gunicorn). Adds ~15–20 s
+  per restart. Plan: `start_period: 90s` on the healthcheck.
+
+```sh
+# Bring it up (idempotent — no-op if already healthy):
+make up                                # full stack
+# or, if you only want Pinot + Superset for BI work:
+make up-bi                             # Pinot quartet + Superset only
+
+# Wait for healthy (about 60–90s on first run):
+docker compose ps superset             # STATUS should say "(healthy)"
+docker compose logs --tail=50 superset-init  # confirm "[superset-init] done"
+curl -fsS http://localhost:8088/health # → "OK"
+```
+
+If `superset-init` exited non-zero, the long-running `superset`
+container will not start (compose `service_completed_successfully`
+gate). Common causes: `pinotdb` install failure (network), corrupt
+SQLite metadata DB on the named volume (`make nuke` to wipe).
+
+### 10b — Wire Superset to the Pinot hybrid table
+
+Once Superset is healthy:
+
+1. Open <http://localhost:8088>. Login `admin` / `admin` (set in
+   `superset_config.py` via the `ADMIN_*` env vars on `superset-init`).
+2. **Settings → Database Connections → + Database**.
+3. Pick **Other** in the dropdown. SQLAlchemy URI:
+
+   ```text
+   pinot://pinot-broker:8099/query/sql?controller=http://pinot-controller:9000
+   ```
+
+   Display name: `Pinot — finpulse`. Click **Test Connection** — must
+   say "Connection looks good!" before saving. (If it fails, the
+   `pinotdb` driver is most likely missing — check
+   `docker compose logs superset | grep pinotdb`.)
+4. **Datasets → + Dataset**. Database = `Pinot — finpulse`,
+   schema = `default`, table = `transactions_scored`. This is the
+   logical hybrid name from Step 9 — Superset queries it; Pinot's
+   broker picks between the real-time and offline physical tables.
+5. Confirm the dataset preview returns rows (run the producer briefly
+   if you want fresh data).
+
+### 10c — Build the three dashboards
+
+Each dashboard is chosen to exercise a different part of the hybrid
+table:
 
 1. **Live fraud-rate monitor** — `count(*) FILTER (WHERE risk_score >= 2)
    / count(*)` over the last 60 min, refreshed every 10 s. Exercises
@@ -692,36 +753,28 @@ of the architecture:
    against `confirmed_fraud` from the offline path, breaks down
    precision per rule. Exercises the offline path and the audit-grade
    labels that aren't available in real-time.
-3. **Alert ticker** — a list view sourced from the `fraud-alerts` Kafka
-   topic (Superset doesn't read Kafka directly, so this is either a
-   second Pinot real-time table on `fraud-alerts`, or a Superset
-   "saved query" against `transactions_scored` filtered to
-   `risk_score >= 2`). Recommendation: filter the existing table —
-   one fewer Pinot table to manage.
+3. **Alert ticker** — a list view filtered to `risk_score >= 2`. Could
+   alternately be a second Pinot real-time table on `fraud-alerts`,
+   but reusing the existing table is one fewer thing to manage.
+
+Export each dashboard to JSON under `docker/superset/dashboards/`
+(Settings → Dashboards → ⋮ → Export) so they can be re-imported on a
+fresh `make nuke && make up`.
 
 **Concepts.**
 
-- **Superset → Pinot via SQLAlchemy.** The connection string is
-  `pinot://pinot-broker:8099/query/sql?controller=http://pinot-controller:9000`.
-  The driver (`pinotdb`) is already wired into Superset via
-  `docker/superset/requirements-local.txt`.
+- **Superset → Pinot via SQLAlchemy.** The connection string above
+  uses the `pinotdb` SQLAlchemy driver (already wired into Superset
+  via `docker/superset/requirements-local.txt`). Both
+  `pinot-broker:8099` (query path) and `pinot-controller:9000`
+  (cluster metadata) need to resolve from inside the Superset
+  container — they do, on the `finpulse` docker network.
 - **Caching trade-offs.** Superset has its own query cache. For a
   live dashboard you want it short (≤10 s) so the screen actually
   updates; for offline-heavy dashboards it can be longer.
 - **Refresh interval ≠ Pinot freshness.** The dashboard refresh rate
   is how often Superset re-runs the query; Pinot's freshness is how
   fast new Kafka events become queryable. Both have to be tuned.
-
-**What to build.**
-
-- Superset database connection: `Pinot — transactions_scored`,
-  pointing at `pinot://pinot-broker:8099/query/sql?...`.
-- Superset dataset: `transactions_scored` (the logical hybrid name —
-  Superset queries that, the broker decides between real-time and
-  offline).
-- Three dashboards as above; export each to JSON under
-  `docker/superset/dashboards/` so they can be re-imported on a
-  fresh `make nuke && make up`.
 
 **Verify.**
 
