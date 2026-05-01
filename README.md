@@ -59,12 +59,18 @@ Superset connects to both. See
 
 ## Prerequisites
 
-- Docker Desktop with **≥ 10 GB RAM, 4+ CPUs** allocated (12 GB
-  recommended for headroom). The full stack idles around ~7 GB
-  resident; `make smoke` adds a transient ~1 GB Spark surge. Below
-  10 GB the kernel OOM-kills Presto when Spark's smoke job spawns
-  an executor — observed empirically. To bump: Docker Desktop →
-  Settings → Resources → Memory.
+- Docker Desktop with **≥ 10 GB RAM, 4+ CPUs** allocated.
+  **You may need to bump this to 12 GB** if you keep the stack up
+  for more than ~1 hour: JVM heaps in Kafka / Flink / Pinot creep
+  upward over time (`make smoke` adds a transient ~1 GB Spark
+  surge on top), and at 10 GB the kernel will OOM-kill Presto
+  mid-smoke once the resident set crosses ~9.7 GB. A fresh
+  `make down && make up` resets heaps to baseline and recovers,
+  but the durable fix is to give Docker more memory:
+  Docker Desktop → Settings → Resources → Memory → 12 GB.
+  Symptoms: `make smoke-presto` fails at the Spark→HMS→Presto
+  round-trip step; `docker inspect presto-coordinator
+  --format '{{.State.OOMKilled}}'` returns `true`.
 - Apple Silicon and amd64 both supported (all images are multi-arch).
   PrestoDB prints *"Support for the ARM architecture is experimental"*
   on arm64 — advisory, not a failure.
