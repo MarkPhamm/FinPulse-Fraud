@@ -2,7 +2,9 @@
 
 Orchestrator for the **nightly batch DAG** (Stage 4 of the project
 brief — landing → curate → enrich → feature store → score → Pinot
-offline segments) and the **streaming-monitoring DAG** (Flink job
+offline segments, with `saveAsTable` registering each `/curated/*`
+and `/analytics/*` output in the Hive Metastore so Presto and
+Superset see them) and the **streaming-monitoring DAG** (Flink job
 liveness + checkpoint age + `fraud-alerts` rate). DAGs live in
 [`airflow/dags/`](../../airflow/dags/) and are auto-loaded by the
 scheduler.
