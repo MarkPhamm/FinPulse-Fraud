@@ -14,6 +14,26 @@ ODSC talks on building production data clusters with Spark, Kafka, Flink,
 Pinot, and Presto. The Robinhood reference architecture our diagrams
 trace lives at [`docs/odsc/robinhood_infrastructure.md`](docs/odsc/robinhood_infrastructure.md).
 
+## References
+
+Background reading that informed the component choices in this stack
+(all from [VuTR](https://vutr.substack.com)):
+
+**Per-component primers:**
+
+- HDFS — [The Hadoop Distributed File System](https://vutr.substack.com/p/i-spent-8-hours-reading-the-paper-523) (paper walk-through)
+- Spark — [The Overview of Apache Spark](https://vutr.substack.com/p/the-overview-of-apache-spark)
+- Pinot — [A Glimpse of Apache Pinot, the Real-Time OLAP Database](https://vutr.substack.com/p/a-glimpse-of-apache-pinot-the-real)
+- Druid (Pinot's closest alternative) — [The Architecture of Apache Druid](https://vutr.substack.com/p/the-architecture-of-apache-druid)
+- Hive — [What is Apache Hive?](https://vutr.substack.com/p/what-is-apache-hive)
+- Presto — [8 Minutes to Understand Presto](https://vutr.substack.com/p/8-minutes-to-understand-presto)
+- Airflow — [Data Engineering System Design: Orchestration](https://vutr.substack.com/p/data-engineering-system-design-orchestration)
+
+**Architecture / system design:**
+
+- [Data engineering system design: 11 data sourcing problems](https://vutr.substack.com/p/data-engineering-system-design-11) — ingestion-layer trade-offs
+- [Data engineering system design: 9 data serving problems](https://vutr.substack.com/p/data-engineering-system-design-9) — serving-layer trade-offs
+
 ## Architecture: Lambda
 
 ![Lambda vs Kappa](images/architecture/lambda_vs_kappa.png)
@@ -60,65 +80,27 @@ What each component does in this stack:
 | **Superset**     | BI / dashboards on top of **both** Pinot (live) and Presto (granular ad-hoc), via two SQLAlchemy drivers (`pinotdb`, `pyhive[presto]`). |
 | **Airflow**      | Orchestration — nightly batch DAG (landing → curate → enrich → score → Pinot offline + HMS register) and a streaming-monitor DAG (Flink job liveness + checkpoint age + alert rate). |
 
-### When to use each
+### Why this lineup
 
-Each tool is here because no single system is fast *and* flexible *and*
-cheap. Picking the right one means knowing what each is **bad** at, not
-just what it's good at.
-
-**HDFS** — distributed file storage.
-
-- *Good at:* durable, replicated Parquet storage; cheap columnar batch reads.
-- *Bad at:* small files (NameNode memory cost), low-latency point lookups, anything OLTP.
-- *Why we have it:* Lambda's master dataset — dims in `/landing` + `/curated`, Spark outputs in `/analytics`.
-
-**Kafka** — distributed, replayable event log.
-
-- *Good at:* ordered event streams, decoupling producers from consumers, replays from any offset, exactly-once via transactions.
-- *Bad at:* long-term storage at scale, ad-hoc queries — it's a log, not a DB.
-- *Why we have it:* source of truth for `transactions`. Spark replays it by offset; Flink reads it continuously.
-
-**Spark** — distributed batch compute.
-
-- *Good at:* TB-scale joins/aggregations across Parquet, complex SQL, ML training, deterministic backfills.
-- *Bad at:* real-time scoring (job startup is seconds), event-time native windowing, low-latency exactly-once with external sinks.
-- *Why we have it:* Kafka × HDFS dims → Pinot offline segments + HMS-registered Parquet for Presto.
-
-**Flink** — stateful stream processing.
-
-- *Good at:* event-time native windowing, exactly-once via two-phase commit with Kafka, low-latency stateful operators.
-- *Bad at:* batch backfills (possible but Spark is more ergonomic), ad-hoc SQL exploration.
-- *Why we have it:* real-time scoring; chosen over Spark Structured Streaming for event-time + 2PC.
-
-**Pinot** — real-time OLAP serving engine.
-
-- *Good at:* sub-second queries on pre-aggregated indexed columns; hybrid tables that merge real-time (Kafka) + offline (Spark) segments.
-- *Bad at:* arbitrary N-way joins, schema flexibility, querying anything outside the pre-modeled `transactions_scored` schema.
-- *Why we have it:* serving layer for *known* dashboard questions ("fraud rate by merchant, last 5 min").
-
-**Hive Metastore** — schema catalog.
-
-- *Good at:* decoupling table metadata from compute — Spark writes a Parquet table, Presto reads it by name with no re-declaration.
-- *Bad at:* structurally, nothing — it's a catalog. Operationally it needs a Postgres backing store and a Postgres JDBC driver (`make hive-deps` fetches it).
-- *Why we have it:* glue between Spark and Presto — `saveAsTable` makes Spark output Presto-queryable for free.
-
-**PrestoDB** — distributed SQL engine over the data lake.
-
-- *Good at:* arbitrary SQL (joins, window functions, subqueries) over any Parquet HMS knows about; full row detail at second-scale latency.
-- *Bad at:* sub-second latency, real-time data, pre-aggregated dashboard speed.
-- *Why we have it:* Pinot answers *known* questions fast; Presto answers *unknown* questions flexibly.
-
-**Superset** — web BI.
-
-- *Good at:* SQL dashboards across multiple sources, sharing charts and saved queries.
-- *Bad at:* deep iterative exploration (Jupyter wins), heavy custom viz.
-- *Why we have it:* one dashboard can mix Pinot (live) + Presto (granular) via `pinotdb` and `pyhive[presto]`.
-
-**Airflow** — workflow orchestration.
-
-- *Good at:* scheduled batch DAGs, retries/backoff, dependency graphs, parameterized backfills.
-- *Bad at:* real-time / event-driven workflows (Kafka + Flink's job), sub-minute schedules.
-- *Why we have it:* nightly batch DAG + streaming-monitor DAG (Flink liveness, checkpoint age, alert rate).
+Three pairings drive the design. **Spark + Flink** because fraud
+detection genuinely needs both flexibility and freshness — Spark for
+batch (heavy joins, ML training, deterministic backfills, full
+historical re-scoring) and Flink for streaming (event-time windowing,
+exactly-once via two-phase commit, sub-second alerts). That's
+Lambda's two-codepath cost in exchange for both properties in the
+same stack. **Flink, not Spark Structured Streaming**, because Spark's
+streaming is micro-batch with processing-time semantics — fraud
+velocity windows need to respect the *txn* timestamp (event-time),
+and the `transactions-scored` and `fraud-alerts` topics must never
+disagree about whether a given event was seen (exactly-once 2PC).
+**Pinot + Presto** because they answer different questions: Pinot
+serves *known* dashboard queries (sub-second, pre-aggregated, fixed
+schema on the `transactions_scored` hybrid table), Presto serves
+*unknown* ad-hoc SQL over granular Parquet at second-scale latency
+with full row detail. Stakeholder dashboards hit Pinot; analyst
+notebooks hit Presto. No single engine is fast *and* flexible —
+running both pays for itself when the workload spans both kinds of
+question.
 
 Per-service deep-dive (image, ports, volumes, configuration, "why this
 shape", caveats) lives under
