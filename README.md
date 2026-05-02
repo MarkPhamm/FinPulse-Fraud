@@ -30,6 +30,66 @@ What each component does in this stack:
 | **Superset**     | BI / dashboards on top of **both** Pinot (live) and Presto (granular ad-hoc), via two SQLAlchemy drivers (`pinotdb`, `pyhive[presto]`). |
 | **Airflow**      | Orchestration — nightly batch DAG (landing → curate → enrich → score → Pinot offline + HMS register) and a streaming-monitor DAG (Flink job liveness + checkpoint age + alert rate). |
 
+### When to use each
+
+Each tool is here because no single system is fast *and* flexible *and*
+cheap. Picking the right one means knowing what each is **bad** at, not
+just what it's good at.
+
+**HDFS** — distributed file storage.
+
+- *Good at:* durable, replicated Parquet storage; cheap columnar batch reads.
+- *Bad at:* small files (NameNode memory cost), low-latency point lookups, anything OLTP.
+- *Why we have it:* Lambda's master dataset — dims in `/landing` + `/curated`, Spark outputs in `/analytics`.
+
+**Kafka** — distributed, replayable event log.
+
+- *Good at:* ordered event streams, decoupling producers from consumers, replays from any offset, exactly-once via transactions.
+- *Bad at:* long-term storage at scale, ad-hoc queries — it's a log, not a DB.
+- *Why we have it:* source of truth for `transactions`. Spark replays it by offset; Flink reads it continuously.
+
+**Spark** — distributed batch compute.
+
+- *Good at:* TB-scale joins/aggregations across Parquet, complex SQL, ML training, deterministic backfills.
+- *Bad at:* real-time scoring (job startup is seconds), event-time native windowing, low-latency exactly-once with external sinks.
+- *Why we have it:* Kafka × HDFS dims → Pinot offline segments + HMS-registered Parquet for Presto.
+
+**Flink** — stateful stream processing.
+
+- *Good at:* event-time native windowing, exactly-once via two-phase commit with Kafka, low-latency stateful operators.
+- *Bad at:* batch backfills (possible but Spark is more ergonomic), ad-hoc SQL exploration.
+- *Why we have it:* real-time scoring; chosen over Spark Structured Streaming for event-time + 2PC.
+
+**Pinot** — real-time OLAP serving engine.
+
+- *Good at:* sub-second queries on pre-aggregated indexed columns; hybrid tables that merge real-time (Kafka) + offline (Spark) segments.
+- *Bad at:* arbitrary N-way joins, schema flexibility, querying anything outside the pre-modeled `transactions_scored` schema.
+- *Why we have it:* serving layer for *known* dashboard questions ("fraud rate by merchant, last 5 min").
+
+**Hive Metastore** — schema catalog.
+
+- *Good at:* decoupling table metadata from compute — Spark writes a Parquet table, Presto reads it by name with no re-declaration.
+- *Bad at:* structurally, nothing — it's a catalog. Operationally it needs a Postgres backing store and a Postgres JDBC driver (`make hive-deps` fetches it).
+- *Why we have it:* glue between Spark and Presto — `saveAsTable` makes Spark output Presto-queryable for free.
+
+**PrestoDB** — distributed SQL engine over the data lake.
+
+- *Good at:* arbitrary SQL (joins, window functions, subqueries) over any Parquet HMS knows about; full row detail at second-scale latency.
+- *Bad at:* sub-second latency, real-time data, pre-aggregated dashboard speed.
+- *Why we have it:* Pinot answers *known* questions fast; Presto answers *unknown* questions flexibly.
+
+**Superset** — web BI.
+
+- *Good at:* SQL dashboards across multiple sources, sharing charts and saved queries.
+- *Bad at:* deep iterative exploration (Jupyter wins), heavy custom viz.
+- *Why we have it:* one dashboard can mix Pinot (live) + Presto (granular) via `pinotdb` and `pyhive[presto]`.
+
+**Airflow** — workflow orchestration.
+
+- *Good at:* scheduled batch DAGs, retries/backoff, dependency graphs, parameterized backfills.
+- *Bad at:* real-time / event-driven workflows (Kafka + Flink's job), sub-minute schedules.
+- *Why we have it:* nightly batch DAG + streaming-monitor DAG (Flink liveness, checkpoint age, alert rate).
+
 Per-service deep-dive (image, ports, volumes, configuration, "why this
 shape", caveats) lives under
 [`docs/infrastructure/`](docs/infrastructure/index.md) — one doc per
