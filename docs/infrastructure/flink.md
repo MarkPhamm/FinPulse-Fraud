@@ -141,6 +141,63 @@ ramp-up.
   Kafka connector inside the image. No `--packages` equivalent
   needed at submit time.
 
+## Why we join inside Flink (vs. denormalize upstream)
+
+The "Robinhood-style" production pattern is to **denormalize upstream**
+— pre-join transactions with all customer / merchant / device
+attributes into a single flat event *before* it lands on the streaming
+topic, so Flink only has to do stateless scoring + windowed
+aggregation. That avoids Flink-side joins entirely. We **diverge** from
+that and let Flink do the dim join via broadcast state.
+
+The trade-off:
+
+|                          | Denormalize upstream (Robinhood)                              | Flink-side broadcast join (us)                                |
+|--------------------------|---------------------------------------------------------------|---------------------------------------------------------------|
+| Where dim ↔ fact joins live | In a CDC / stream-table-join service *before* Kafka         | Inside the Flink job                                          |
+| Flink job complexity     | Stateless or near-stateless                                    | Stateful: broadcast state + per-event lookup                  |
+| Dim refresh story        | Owned by the upstream join service                             | Flink re-broadcasts a fresh dim snapshot on a schedule        |
+| Topic on Kafka           | One **denormalized** topic, all attributes inline              | One `transactions` topic, attributes joined late              |
+| Dim-drift risk           | Low (single canonical join service)                            | Higher (snapshot only as fresh as last rebroadcast)           |
+| Pinot fit                | Excellent — Pinot prefers flat denormalized rows               | Same — Flink emits already-enriched `transactions-scored`     |
+| Best when…               | Dims are large (millions+), production-grade, multi-team       | Dims are small + slowly changing, single-team, simplicity wins |
+
+Why we picked Flink-side broadcast for this project:
+
+1. **The dims are tiny.** ~725K rows total across the 4 dim datasets
+   (~200 MB in JVM heap on every TaskManager). Broadcast state is
+   essentially free at this scale; lookups are O(1) hash-map hits in
+   local heap, single-digit µs per event.
+2. **The producer is `replay_transactions.py`, not a CDC pipeline.**
+   The Robinhood pattern assumes a transaction-source service that
+   already has access to dim state. We don't — pushing dim joins
+   into a 100-line replay script would couple it to a 600 K-row dim
+   load. Doesn't fit.
+3. **No second streaming service to operate.** Denormalizing
+   upstream typically means a *separate* Flink / Spark Structured
+   Streaming / ksqlDB job that joins txns × dims and writes a
+   denormalized topic. That's another stateful streaming app to
+   deploy and monitor — and at this scale it'd be running the same
+   broadcast join the scoring job already does, just one hop earlier.
+4. **The "Flink is bad at joins" reputation doesn't apply here.**
+   That reputation comes from stream × stream regular joins (state
+   grows unbounded) and synchronous lookup joins to external DBs
+   (RPC per event). Broadcast state vs. small slowly-changing dim is
+   the canonical *fast* Flink join shape.
+
+When we'd switch to denormalize-upstream:
+
+- Any dim grows past ~1 GB per TaskManager — broadcast no longer fits
+  in heap, and we'd need a keyed-stream join with co-partitioned dim
+  or a temporal-table join with RocksDB-backed state.
+- A second downstream consumer needs the same enriched events — at
+  that point publishing a single denormalized topic pays for itself.
+- We move from `replay_transactions.py` to a real production source
+  that has access to dim state at write time anyway.
+
+For the class-project scope, the broadcast pattern wins on operational
+simplicity with no meaningful performance penalty at our event rate.
+
 ## Alternatives
 
 Where Flink sits in the stream-processing landscape:
