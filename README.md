@@ -82,25 +82,26 @@ What each component does in this stack:
 
 ### Why this lineup
 
-Three pairings drive the design. **Spark + Flink** because fraud
-detection genuinely needs both flexibility and freshness — Spark for
-batch (heavy joins, ML training, deterministic backfills, full
-historical re-scoring) and Flink for streaming (event-time windowing,
-exactly-once via two-phase commit, sub-second alerts). That's
-Lambda's two-codepath cost in exchange for both properties in the
-same stack. **Flink, not Spark Structured Streaming**, because Spark's
-streaming is micro-batch with processing-time semantics — fraud
-velocity windows need to respect the *txn* timestamp (event-time),
-and the `transactions-scored` and `fraud-alerts` topics must never
-disagree about whether a given event was seen (exactly-once 2PC).
-**Pinot + Presto** because they answer different questions: Pinot
-serves *known* dashboard queries (sub-second, pre-aggregated, fixed
-schema on the `transactions_scored` hybrid table), Presto serves
-*unknown* ad-hoc SQL over granular Parquet at second-scale latency
-with full row detail. Stakeholder dashboards hit Pinot; analyst
-notebooks hit Presto. No single engine is fast *and* flexible —
-running both pays for itself when the workload spans both kinds of
-question.
+Three pairings drive the design:
+
+- **Spark + Flink** — fraud detection genuinely needs both flexibility
+  and freshness. Spark for batch (heavy joins, ML training,
+  deterministic backfills, full historical re-scoring); Flink for
+  streaming (event-time windowing, exactly-once via two-phase commit,
+  sub-second alerts). That's Lambda's two-codepath cost in exchange
+  for both properties in the same stack.
+- **Flink, not Spark Structured Streaming** — Spark's streaming is
+  micro-batch with processing-time semantics. Fraud velocity windows
+  need to respect the *txn* timestamp (event-time), and the
+  `transactions-scored` and `fraud-alerts` topics must never disagree
+  about whether a given event was seen (exactly-once 2PC).
+- **Pinot + Presto** — they answer different questions. Pinot serves
+  *known* dashboard queries (sub-second, pre-aggregated, fixed schema
+  on the `transactions_scored` hybrid table); Presto serves *unknown*
+  ad-hoc SQL over granular Parquet at second-scale latency with full
+  row detail. Stakeholder dashboards hit Pinot; analyst notebooks hit
+  Presto. No single engine is fast *and* flexible — running both pays
+  for itself when the workload spans both kinds of question.
 
 Per-service deep-dive (image, ports, volumes, configuration, "why this
 shape", caveats) lives under
