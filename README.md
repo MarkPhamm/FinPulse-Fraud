@@ -23,6 +23,7 @@ Background reading that informed the component choices in this stack
 
 - HDFS — [The Hadoop Distributed File System](https://vutr.substack.com/p/i-spent-8-hours-reading-the-paper-523) (paper walk-through)
 - Spark — [The Overview of Apache Spark](https://vutr.substack.com/p/the-overview-of-apache-spark)
+- Kafka — [If You're Learning Kafka, This Article Is for You](https://vutr.substack.com/p/if-youre-learning-kafka-this-article)
 - Pinot — [A Glimpse of Apache Pinot, the Real-Time OLAP Database](https://vutr.substack.com/p/a-glimpse-of-apache-pinot-the-real)
 - Druid (Pinot's closest alternative) — [The Architecture of Apache Druid](https://vutr.substack.com/p/the-architecture-of-apache-druid)
 - Hive — [What is Apache Hive?](https://vutr.substack.com/p/what-is-apache-hive)
