@@ -11,6 +11,112 @@ tables as durable input. Presto reaches them through the Hive
 Metastore catalog (see [`presto.md`](presto.md)) rather than
 path-based; the bytes still live here.
 
+## Concepts
+
+A short glossary of HDFS internals. Read before designing anything that
+talks to the cluster — most of these terms show up in NameNode logs, the
+web UI, and the dataflow plan.
+
+**Core components**
+
+- **NameNode**: Dedicated metadata server. Holds namespace tree +
+  file-block-to-DataNode mapping in RAM. Directs clients to DataNodes
+  for I/O.
+- **DataNode**: Stores actual block data. Each replica = data file +
+  metadata file (checksums + generation stamp). Sends block reports +
+  heartbeats to NameNode.
+- **HDFS Client**: Library apps use to talk to HDFS. Contacts NameNode
+  for metadata, then reads/writes directly to DataNodes.
+- **CheckpointNode**: Secondary NameNode role. Periodically downloads
+  checkpoint + journal, merges them, returns new checkpoint. Keeps
+  journal small.
+- **BackupNode**: Like CheckpointNode but maintains an in-memory
+  namespace image synced via journal stream from active NameNode.
+  Effectively a read-only NameNode.
+
+**Metadata concepts**
+
+- **inode**: In-memory file/directory record on NameNode. Holds
+  permissions, mod/access times, namespace, quotas (no block locations).
+- **Image**: Full filesystem metadata, inodes + file-to-blocks mapping.
+  Lives in NameNode RAM.
+- **Checkpoint**: Persistent on-disk snapshot of the image. Replaced
+  wholesale, never mutated in place.
+- **Journal**: Write-ahead commit log of image changes. Replayed on
+  checkpoint at startup. Replicated for durability.
+- **Namespace ID**: Unique ID assigned to a filesystem instance,
+  persisted on all nodes. Mismatched ID = node refused at handshake.
+- **Storage ID**: DataNode's internal unique ID assigned at registration.
+  Stable across IP changes.
+
+**Storage units**
+
+- **Block**: Unit of file split. Default 128 MB, configurable.
+  Independently replicated (default 3x).
+- **Replica**: Copy of a block on a DataNode. Has its own generation
+  stamp + checksum metadata.
+- **Generation stamp**: Versioning identifier on a replica, used to
+  detect stale replicas.
+- **Checksum**: Per-block hash computed by client on write, verified by
+  client on read. Mismatch → reported to NameNode, replica marked
+  corrupt.
+
+**Protocols / messages**
+
+- **Handshake**: Startup protocol verifying namespace ID + software
+  version between DataNode and NameNode. Mismatch → DataNode shuts down.
+- **Block report**: DataNode → NameNode list of all replicas it holds
+  (block ID, gen stamp, length). First sent at registration, then
+  hourly.
+- **Heartbeat**: DataNode → NameNode every 3s with capacity/usage stats.
+  No heartbeat for 10 min → NameNode declares node dead.
+- **Heartbeat reply**: NameNode piggybacks instructions (replicate,
+  delete, re-register, shutdown, send block report).
+
+**I/O model**
+
+- **Single-writer, multiple-reader**: One writer at a time per file,
+  many concurrent readers. Files are append-only, no in-place edits.
+- **Lease**: Exclusive write grant tied to a client. Soft limit =
+  exclusive window; hard limit = NameNode reclaims and closes file.
+- **Write pipeline**: DataNodes chained to minimize network distance.
+  Client streams 64 KB packets through the chain; next packet ships
+  before prior ACK.
+- **Read path**: Client gets replica locations from NameNode, sorted by
+  distance, reads from closest. Falls back down the list on failure.
+
+**Reliability / placement**
+
+- **Block placement policy**: No DataNode holds >1 replica of a block;
+  no rack holds >2 replicas of the same block (when enough racks
+  exist).
+- **Replication factor**: Per-file replica count, default 3,
+  configurable.
+- **Replication priority queue**: Under-replicated blocks queued by
+  urgency (1 replica = highest priority).
+- **Balancer**: Moves replicas from high-utilization DataNodes to
+  low-utilization ones. Threshold (0,1) defines balance; bandwidth cap
+  limits impact. Won't reduce replica/rack count; prefers intra-rack
+  copy when possible.
+- **Block Scanner**: Background job on each DataNode that re-verifies
+  replica checksums against stored values. Logs verified time.
+  Corruption → NameNode replicates a good copy first, then deletes
+  corrupt one.
+- **Decommissioning**: Marking a node for removal via excluded list.
+  NameNode stops placing new replicas there and migrates existing ones
+  off before safe removal.
+- **Snapshot**: Point-in-time state of filesystem for rollback after
+  upgrades. NameNode merges checkpoint+journal to new location;
+  DataNodes hardlink existing block files (no data duplication).
+- **DistCp**: MapReduce-based tool for large parallel inter/intra-cluster
+  copies. Each map task copies a slice; framework handles scheduling +
+  recovery.
+
+**Rack awareness**
+
+- **Rack**: Group of nodes sharing a switch. Intra-rack bandwidth >
+  inter-rack. Drives placement policy and distance-based read ordering.
+
 ## Topology
 
 | Service       | Image                          | Hostname     | Host → container ports | What other services talk to it       |
