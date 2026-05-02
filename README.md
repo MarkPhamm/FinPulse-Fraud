@@ -2,17 +2,11 @@
 
 Fraud detection & transaction analytics on a HDFS / Spark / Kafka / Flink /
 Pinot / PrestoDB-on-HMS / Superset / Airflow stack, following the
-[Robinhood data infrastructure](docs/odsc/robinhood_infrastructure.md)
-pattern (Kafka → Flink → Pinot for streaming, Spark + HMS + Presto for the
-batch / granular DWH side).
-See [`docs/scenario.md`](docs/scenario.md) for the project brief.
-
-The streaming + dual-serving-layer architecture (Spark batch + Kafka + Flink
-streaming + Pinot real-time OLAP + PrestoDB-on-HMS for granular SQL) is
+**Robinhood data infrastructure** pattern (Kafka → Flink → Pinot for
+streaming, Spark + HMS + Presto for batch / granular DWH). Architecture
 inspired by **[Deep Patel](https://www.linkedin.com/in/deeppatel710/)**'s
-ODSC talks on building production data clusters with Spark, Kafka, Flink,
-Pinot, and Presto. The Robinhood reference architecture our diagrams
-trace lives at [`docs/odsc/robinhood_infrastructure.md`](docs/odsc/robinhood_infrastructure.md).
+ODSC talks; project brief in [`docs/scenario.md`](docs/scenario.md),
+reference architecture in [`docs/odsc/robinhood_infrastructure.md`](docs/odsc/robinhood_infrastructure.md).
 
 ## References
 
