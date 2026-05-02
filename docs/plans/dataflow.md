@@ -148,7 +148,7 @@ offline generator that synthesizes the five datasets with planted
 fraud signals (seed `2041` for reproducibility). It is **not** a
 runtime component: it runs once on the host, writes the gz files,
 and is never invoked again. It is unrelated to the Kafka producer
-in Step 7 (which will live at `src/producer/replay_transactions.py`).
+in Step 3 (which will live at `src/producer/replay_transactions.py`).
 Treat `generate_data.py` as sitting *before* the diagram below —
 it's the upstream provider we pretend already gave us a 6-month
 dump.
@@ -227,10 +227,10 @@ flowchart LR
     d4 -->|Step 1| l4
     d5 -->|Step 1| l5
 
-    l2 -->|Step 3| c2
-    l3 -->|Step 3| c3
-    l4 -->|Step 3| c4
-    l5 -->|Step 3| c5
+    l2 -->|Step 2| c2
+    l3 -->|Step 2| c3
+    l4 -->|Step 2| c4
+    l5 -->|Step 2| c5
 
     c2 --> spark
     c3 --> spark
@@ -243,25 +243,25 @@ flowchart LR
     a2 -->|Step 6| a3
 
     %% Transactions: host -> Kafka only (never HDFS)
-    d1 -->|"Step 7 producer<br/>only path for txns"| k1
+    d1 -->|"Step 3 producer<br/>only path for txns"| k1
 
     %% Spark batch-reads the same Kafka 'transactions' topic
     k1 -.->|batch read<br/>by offset range| spark
 
     %% Flink: streaming consumer of the same Kafka topic
-    k1 -->|Step 8<br/>streaming consumer| flink
+    k1 -->|Step 7<br/>streaming consumer| flink
     a2 -.->|broadcast state<br/>refreshed nightly| flink
     flink --> k2
     flink --> k3
 
     %% Pinot ingestion (hybrid table)
-    k2 -->|Step 9<br/>real-time ingest| prt
-    a1 -->|Step 9<br/>nightly Spark<br/>segments| pof
+    k2 -->|Step 8<br/>real-time ingest| prt
+    a1 -->|Step 8<br/>nightly Spark<br/>segments| pof
 
     %% HMS catalog: Spark saveAsTable registers /curated and /analytics
     %% tables; Presto reads them via the Hive connector. Bytes still
     %% live in HDFS.
-    spark -.->|Step 9b<br/>saveAsTable<br/>over Thrift| hms
+    spark -.->|Step 9<br/>saveAsTable<br/>over Thrift| hms
     hms --> presto
     c2 --> presto
     c3 --> presto
@@ -335,9 +335,9 @@ the wiring.
 
 ```text
 4 dim .gz files  ─►  /landing  ─►  /curated  ─┐
-                       (Step 1)    (Step 3)   ▼
+                       (Step 1)    (Step 2)   ▼
                                           Spark batch  ─►  /analytics  ──►  HMS  ──►  Presto  ──►  notebook
-                                              ▲           (Steps 4-6)    (Step 9b)             (Step 12)
+                                              ▲           (Steps 4-6)    (Step 9)             (Step 12)
 Kafka 'transactions'  ────────────────────────┘                            │
                                           (batch read by offset, Step 4)   └──►  Pinot offline  ──►  notebook
 ```
@@ -348,7 +348,7 @@ Kafka 'transactions'  ───────────────────�
    - The four dimension / fact-secondary files are copied as-is. `.gz`
      stays gzipped. No schema, no parse.
    - **`transactions.csv.gz` is NOT in this step.** It goes only to
-     Kafka via the producer (Step 7). HDFS has no `/landing/transactions/`
+     Kafka via the producer (Step 3). HDFS has no `/landing/transactions/`
      and no `/curated/transactions/`.
    - Replication 3 for `fraud-reports` and `customer-profiles`
      (audit + regulatory); replication 2 for the others.
@@ -358,7 +358,7 @@ Kafka 'transactions'  ───────────────────�
      dimensions. For transactions, that role belongs to the Kafka
      topic.
 
-2. **`/landing` → `/curated`** *(Step 3, clean to Parquet)*
+2. **`/landing` → `/curated`** *(Step 2, clean to Parquet)*
    - `device-fingerprints` partitioned by `device_type` (mobile /
      desktop / tablet) — a few queries split on this.
    - Dimensions (`customer-profiles`, `merchant-directory`) — no
@@ -397,7 +397,7 @@ Kafka 'transactions'  ───────────────────�
      MB Parquet), self-contained, and PII-light. It's the bridge to
      streaming.
 
-5. **`/analytics/scored` → HMS → Presto → notebook** *(Steps 6, 9b, 12)*
+5. **`/analytics/scored` → HMS → Presto → notebook** *(Steps 6, 9, 12)*
    - Offline scoring applies rules + (optional) ML to the enriched
      fact and writes per-txn predictions; Spark `saveAsTable`
      registers it in HMS at the same time.
@@ -411,14 +411,14 @@ Kafka 'transactions'  ───────────────────�
 
 ```text
 transactions.csv.gz  ─►  Kafka 'transactions'  ─►  Flink scoring  ─►  Kafka 'transactions-scored' ─► Pinot real-time
-   (host file)            (Step 7 producer)        (Step 8 job)            (Step 9 ingest)            ↓
+   (host file)            (Step 3 producer)        (Step 7 job)            (Step 8 ingest)            ↓
                                                         │                                       Superset
                                                         └──► Kafka 'fraud-alerts' ──────────────────►
 ```
 
 **What moves where:**
 
-1. **`transactions.csv.gz` → Kafka topic `transactions`** *(Step 7, producer)*
+1. **`transactions.csv.gz` → Kafka topic `transactions`** *(Step 3, producer)*
    - A small Python script reads the gz file row-by-row and publishes
      each row as a JSON value, **keyed by `card_id`**.
    - **Why key by `card_id`.** Same key → same partition → guaranteed
@@ -437,7 +437,7 @@ transactions.csv.gz  ─►  Kafka 'transactions'  ─►  Flink scoring  ─►
      **not** flow through Kafka. They are static (or
      after-the-fact) and live in HDFS only.
 
-2. **Kafka `transactions` → Flink scoring app** *(Step 8)*
+2. **Kafka `transactions` → Flink scoring app** *(Step 7)*
    - The streaming job is a long-lived **Flink** application
      (`src/consumer/stream_score/`). Flink, not Spark Structured
      Streaming, because:
@@ -477,7 +477,7 @@ transactions.csv.gz  ─►  Kafka 'transactions'  ─►  Flink scoring  ─►
    - Both writes participate in the same Flink checkpoint, so the
      two topics never disagree about whether a given txn was seen.
 
-4. **Kafka `transactions-scored` → Pinot real-time table** *(Step 9)*
+4. **Kafka `transactions-scored` → Pinot real-time table** *(Step 8)*
    - Pinot's server tails the Kafka topic directly — no Spark, no
      Flink in between. Each consuming segment builds an in-memory
      row-store index; once it hits the size threshold it's sealed
@@ -587,23 +587,23 @@ aren't, deliberately:
   device metadata that we use *in the batch enrichment* but not
   per-event in streaming. (You could extend it: have the streaming
   job broadcast-load `/curated/device-fingerprints/` too. Worth
-  considering once Step 8 works.)
+  considering once Step 7 works.)
 
 ## How a single transaction travels
 
 To make it concrete, follow one row from `data/transactions.csv.gz`:
 
-1. **Step 7 — into Kafka.** The producer reads the row from the gz
+1. **Step 3 — into Kafka.** The producer reads the row from the gz
    file and publishes it to Kafka topic `transactions`, keyed by
    `card_id`. This is the *only* place the transaction enters the
    system. There is no HDFS landing or curate stage for txns.
-2. **Step 8 — Flink consumes (streaming).** Within seconds, the Flink
+2. **Step 7 — Flink consumes (streaming).** Within seconds, the Flink
    job sees the event, looks up the broadcast customer-features
    state, applies the rules + sliding-window velocity, computes a
    risk score, and — inside one Flink checkpoint — writes a record
    to `transactions-scored` (always) and `fraud-alerts` (if
    `risk_score >= 2`).
-3. **Step 9 — Pinot ingests in real-time.** Pinot's server tails
+3. **Step 8 — Pinot ingests in real-time.** Pinot's server tails
    `transactions-scored` and the row appears in the real-time table
    within seconds. Superset (Step 10) sees it on any dashboard
    scoped to "today" — the broker is reading the real-time path.
