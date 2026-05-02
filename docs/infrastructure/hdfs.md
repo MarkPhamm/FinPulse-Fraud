@@ -34,6 +34,12 @@ web UI, and the dataflow plan.
   namespace image synced via journal stream from active NameNode.
   Effectively a read-only NameNode.
 
+CheckpointNode (periodic batch) vs BackupNode (live journal stream) —
+neither holds block locations; those only come from DataNode block
+reports:
+
+![CheckpointNode vs BackupNode](../../images/hdfs/checkpoint_node_back_up_node.png)
+
 **Metadata concepts**
 
 - **inode**: In-memory file/directory record on NameNode. Holds
@@ -48,6 +54,13 @@ web UI, and the dataflow plan.
   persisted on all nodes. Mismatched ID = node refused at handshake.
 - **Storage ID**: DataNode's internal unique ID assigned at registration.
   Stable across IP changes.
+
+The Image lives in NameNode RAM and writes are appended to the on-disk
+Journal; the Checkpoint is a periodic snapshot of the Image. On startup,
+the NameNode loads the Checkpoint, replays the Journal on top, and the
+Image is current — lose either and the namespace is corrupt:
+
+![Image / Checkpoint / Journal flow](../../images/hdfs/name_node_check_point_journal.png)
 
 **Storage units**
 
@@ -108,9 +121,26 @@ web UI, and the dataflow plan.
 - **Snapshot**: Point-in-time state of filesystem for rollback after
   upgrades. NameNode merges checkpoint+journal to new location;
   DataNodes hardlink existing block files (no data duplication).
+- **Rollback**: Restart-with-flag that rewinds the cluster to a
+  previous snapshot. NameNode loads the snapshotted checkpoint;
+  DataNodes restore renamed directories and background-delete any
+  blocks created after the snapshot. Result: cluster state matches the
+  moment the snapshot was taken.
 - **DistCp**: MapReduce-based tool for large parallel inter/intra-cluster
   copies. Each map task copies a slice; framework handles scheduling +
   recovery.
+
+A snapshot is cheap because DataNodes hard-link existing block files
+rather than copying them — same idea as ZFS/Btrfs snapshots, git
+object store, or Docker layer caching:
+
+![Snapshot mechanism](../../images/hdfs/snapshot.png)
+
+Rollback is the read path on a snapshot: admin restarts with a rollback
+flag, NameNode rewinds the image, DataNodes restore directory structure
+and clean up any post-snapshot blocks:
+
+![Rollback mechanism](../../images/hdfs/rollback.png)
 
 **Rack awareness**
 
