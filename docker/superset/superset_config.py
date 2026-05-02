@@ -9,6 +9,7 @@ Class-project scope: SQLite metadata DB on a named volume (single-user). For
 multi-user dashboard editing, switch SQLALCHEMY_DATABASE_URI to a Postgres URL
 and create a `superset` database in the existing postgres container.
 """
+
 import os
 
 # Metadata DB. SQLite file lives on the `superset-data` named volume so it

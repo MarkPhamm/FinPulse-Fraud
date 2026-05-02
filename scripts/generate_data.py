@@ -23,18 +23,79 @@ NUM_MERCHANTS = 10000
 MERCHANT_IDS = [f"MERCH-{i:05d}" for i in range(1, NUM_MERCHANTS + 1)]
 
 MERCHANT_CATEGORIES = [
-    "retail", "grocery", "restaurant", "gas_station", "online_marketplace",
-    "electronics", "travel", "entertainment", "healthcare", "subscription_service",
-    "luxury_goods", "gambling", "digital_goods", "money_transfer", "jewelry"
+    "retail",
+    "grocery",
+    "restaurant",
+    "gas_station",
+    "online_marketplace",
+    "electronics",
+    "travel",
+    "entertainment",
+    "healthcare",
+    "subscription_service",
+    "luxury_goods",
+    "gambling",
+    "digital_goods",
+    "money_transfer",
+    "jewelry",
 ]
-MERCHANT_CAT_WEIGHTS = [0.15, 0.14, 0.12, 0.10, 0.10, 0.08, 0.06, 0.05, 0.05,
-                        0.04, 0.03, 0.02, 0.02, 0.02, 0.02]
+MERCHANT_CAT_WEIGHTS = [
+    0.15,
+    0.14,
+    0.12,
+    0.10,
+    0.10,
+    0.08,
+    0.06,
+    0.05,
+    0.05,
+    0.04,
+    0.03,
+    0.02,
+    0.02,
+    0.02,
+    0.02,
+]
 
 # High fraud risk categories
-HIGH_RISK_CATEGORIES = {"gambling", "money_transfer", "digital_goods", "luxury_goods", "jewelry"}
+HIGH_RISK_CATEGORIES = {
+    "gambling",
+    "money_transfer",
+    "digital_goods",
+    "luxury_goods",
+    "jewelry",
+}
 
-COUNTRIES = ["US", "CA", "UK", "DE", "FR", "BR", "MX", "IN", "CN", "NG", "RU", "JP", "AU"]
-HOME_COUNTRY_WEIGHTS = [0.50, 0.12, 0.12, 0.08, 0.04, 0.03, 0.02, 0.02, 0.01, 0.01, 0.01, 0.02, 0.02]
+COUNTRIES = [
+    "US",
+    "CA",
+    "UK",
+    "DE",
+    "FR",
+    "BR",
+    "MX",
+    "IN",
+    "CN",
+    "NG",
+    "RU",
+    "JP",
+    "AU",
+]
+HOME_COUNTRY_WEIGHTS = [
+    0.50,
+    0.12,
+    0.12,
+    0.08,
+    0.04,
+    0.03,
+    0.02,
+    0.02,
+    0.01,
+    0.01,
+    0.01,
+    0.02,
+    0.02,
+]
 CHANNELS = ["online", "in_store", "atm", "contactless"]
 CHANNEL_WEIGHTS = [0.40, 0.30, 0.10, 0.20]
 CURRENCIES = ["USD", "CAD", "GBP", "EUR"]
@@ -82,9 +143,13 @@ for cid in CUSTOMER_IDS:
     typical = rng_setup.sample(MERCHANT_CATEGORIES, k=n_cats)
 
     CUSTOMER_ATTRS[cid] = {
-        "home_country": home, "income_bracket": income, "age": age,
-        "account_age_months": acct_age, "avg_monthly_spend": avg_spend,
-        "credit_limit": credit_limit, "typical_categories": typical
+        "home_country": home,
+        "income_bracket": income,
+        "age": age,
+        "account_age_months": acct_age,
+        "avg_monthly_spend": avg_spend,
+        "credit_limit": credit_limit,
+        "typical_categories": typical,
     }
 
 # Pre-assign merchant attributes
@@ -92,14 +157,21 @@ MERCHANT_ATTRS = {}
 for mid in MERCHANT_IDS:
     cat = rng_setup.choices(MERCHANT_CATEGORIES, weights=MERCHANT_CAT_WEIGHTS, k=1)[0]
     country = rng_setup.choices(COUNTRIES, weights=HOME_COUNTRY_WEIGHTS, k=1)[0]
-    risk = rng_setup.randint(6, 10) if cat in HIGH_RISK_CATEGORIES else rng_setup.randint(1, 7)
+    risk = (
+        rng_setup.randint(6, 10)
+        if cat in HIGH_RISK_CATEGORIES
+        else rng_setup.randint(1, 7)
+    )
     avg_txn = round(rng_setup.uniform(5, 500), 2)
     monthly_vol = rng_setup.randint(100, 50000)
     name = f"Merchant_{mid.split('-')[1]}"
     MERCHANT_ATTRS[mid] = {
-        "name": name, "category": cat, "country": country,
-        "risk_score": risk, "avg_transaction_amount": avg_txn,
-        "monthly_volume": monthly_vol
+        "name": name,
+        "category": cat,
+        "country": country,
+        "risk_score": risk,
+        "avg_transaction_amount": avg_txn,
+        "monthly_volume": monthly_vol,
     }
 
 
@@ -115,9 +187,20 @@ def generate_transactions():
 
     with open(filepath, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["txn_id", "timestamp", "card_id", "merchant_id", "amount",
-                          "currency", "merchant_category", "country", "channel",
-                          "is_international"])
+        writer.writerow(
+            [
+                "txn_id",
+                "timestamp",
+                "card_id",
+                "merchant_id",
+                "amount",
+                "currency",
+                "merchant_category",
+                "country",
+                "channel",
+                "is_international",
+            ]
+        )
         for i in range(1000000):
             txn_id = f"TXN-{i + 1:07d}"
             customer = rng.choice(CUSTOMER_IDS)
@@ -152,12 +235,20 @@ def generate_transactions():
                 amount = round(amount * rng.uniform(1.5, 5.0), 2)
                 fraud_txn_ids.append(txn_id)
 
-            writer.writerow([
-                txn_id, ts.strftime("%Y-%m-%d %H:%M:%S"),
-                card, merchant, amount, currency,
-                category, country, channel,
-                str(is_international).lower()
-            ])
+            writer.writerow(
+                [
+                    txn_id,
+                    ts.strftime("%Y-%m-%d %H:%M:%S"),
+                    card,
+                    merchant,
+                    amount,
+                    currency,
+                    category,
+                    country,
+                    channel,
+                    str(is_international).lower(),
+                ]
+            )
 
     # Save fraud IDs for fraud-reports generation
     with open(os.path.join(OUTPUT_DIR, ".fraud_ids.tmp"), "w") as f:
@@ -186,7 +277,7 @@ def generate_customer_profiles():
                 "avg_monthly_spend": attrs["avg_monthly_spend"],
                 "home_country": attrs["home_country"],
                 "typical_categories": attrs["typical_categories"],
-                "credit_limit": attrs["credit_limit"]
+                "credit_limit": attrs["credit_limit"],
             }
             line = json.dumps(record)
             if idx < NUM_CUSTOMERS - 1:
@@ -206,15 +297,30 @@ def generate_merchant_directory():
 
     with open(filepath, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["merchant_id", "name", "category", "country", "risk_score",
-                          "avg_transaction_amount", "monthly_volume"])
+        writer.writerow(
+            [
+                "merchant_id",
+                "name",
+                "category",
+                "country",
+                "risk_score",
+                "avg_transaction_amount",
+                "monthly_volume",
+            ]
+        )
         for mid in MERCHANT_IDS:
             attrs = MERCHANT_ATTRS[mid]
-            writer.writerow([
-                mid, attrs["name"], attrs["category"], attrs["country"],
-                attrs["risk_score"], attrs["avg_transaction_amount"],
-                attrs["monthly_volume"]
-            ])
+            writer.writerow(
+                [
+                    mid,
+                    attrs["name"],
+                    attrs["category"],
+                    attrs["country"],
+                    attrs["risk_score"],
+                    attrs["avg_transaction_amount"],
+                    attrs["monthly_volume"],
+                ]
+            )
 
     print(f"  Done: {os.path.getsize(filepath) / 1e6:.1f} MB")
 
@@ -239,7 +345,11 @@ def generate_fraud_reports():
     with open(filepath, "w") as f:
         f.write("[\n")
         count = min(15000, len(fraud_txn_ids))
-        selected = rng.sample(fraud_txn_ids, k=count) if len(fraud_txn_ids) >= count else fraud_txn_ids
+        selected = (
+            rng.sample(fraud_txn_ids, k=count)
+            if len(fraud_txn_ids) >= count
+            else fraud_txn_ids
+        )
 
         # Also add some false alarms
         while len(selected) < 15000:
@@ -265,7 +375,7 @@ def generate_fraud_reports():
                 "reported_by": reported_by,
                 "fraud_type": fraud_type,
                 "amount_disputed": amount,
-                "resolution": resolution
+                "resolution": resolution,
             }
             line = json.dumps(record)
             if i < 14999:
@@ -296,14 +406,43 @@ def generate_device_fingerprints():
 
     with open(filepath, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["session_id", "txn_id", "device_type", "os", "browser",
-                          "ip_country", "ip_city", "is_vpn", "is_known_device",
-                          "login_attempt_count"])
+        writer.writerow(
+            [
+                "session_id",
+                "txn_id",
+                "device_type",
+                "os",
+                "browser",
+                "ip_country",
+                "ip_city",
+                "is_vpn",
+                "is_known_device",
+                "login_attempt_count",
+            ]
+        )
 
-        cities = ["New York", "Los Angeles", "Chicago", "Houston", "Toronto",
-                  "London", "Berlin", "Paris", "Mumbai", "Tokyo",
-                  "Sao Paulo", "Mexico City", "Lagos", "Moscow", "Sydney",
-                  "San Francisco", "Dallas", "Miami", "Vancouver", "Manchester"]
+        cities = [
+            "New York",
+            "Los Angeles",
+            "Chicago",
+            "Houston",
+            "Toronto",
+            "London",
+            "Berlin",
+            "Paris",
+            "Mumbai",
+            "Tokyo",
+            "Sao Paulo",
+            "Mexico City",
+            "Lagos",
+            "Moscow",
+            "Sydney",
+            "San Francisco",
+            "Dallas",
+            "Miami",
+            "Vancouver",
+            "Manchester",
+        ]
 
         for i in range(600000):
             sess_id = f"DSESS-{i + 1:07d}"
@@ -327,12 +466,20 @@ def generate_device_fingerprints():
                 is_known = rng.random() < 0.85
                 login_attempts = rng.choices([1, 1, 1, 2, 3], k=1)[0]
 
-            writer.writerow([
-                sess_id, txn_id, device, os_type, browser,
-                ip_country, ip_city,
-                str(is_vpn).lower(), str(is_known).lower(),
-                login_attempts
-            ])
+            writer.writerow(
+                [
+                    sess_id,
+                    txn_id,
+                    device,
+                    os_type,
+                    browser,
+                    ip_country,
+                    ip_city,
+                    str(is_vpn).lower(),
+                    str(is_known).lower(),
+                    login_attempts,
+                ]
+            )
 
     print(f"  Done: {os.path.getsize(filepath) / 1e6:.1f} MB")
 

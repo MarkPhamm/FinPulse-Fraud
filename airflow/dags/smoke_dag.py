@@ -18,5 +18,6 @@ with DAG(
     catchup=False,
     tags=["smoke"],
 ) as dag:
-    PythonOperator(task_id="hello_python", python_callable=_say_hello) \
-        >> BashOperator(task_id="hello_bash", bash_command="echo finpulse smoke ok")
+    PythonOperator(task_id="hello_python", python_callable=_say_hello) >> BashOperator(
+        task_id="hello_bash", bash_command="echo finpulse smoke ok"
+    )

@@ -19,12 +19,7 @@ the Hive bridge JAR (same posture as the spark-sql-kafka connector):
 
 from pyspark.sql import SparkSession
 
-spark = (
-    SparkSession.builder
-    .appName("smoke_presto")
-    .enableHiveSupport()
-    .getOrCreate()
-)
+spark = SparkSession.builder.appName("smoke_presto").enableHiveSupport().getOrCreate()
 
 rows = [(1, "alice", 100.0), (2, "bob", 250.0), (3, "carol", 42.0)]
 df = spark.createDataFrame(rows, schema="id INT, name STRING, amount DOUBLE")

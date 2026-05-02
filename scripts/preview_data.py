@@ -9,6 +9,7 @@ Output goes to data/preview/, one file per input:
 
 Run from repo root:  python3 scripts/preview_data.py
 """
+
 from __future__ import annotations
 
 import gzip
@@ -25,7 +26,9 @@ OUT_DIR = DATA_DIR / "preview"
 
 
 def preview_csv(src: Path, dst: Path, n_rows: int) -> int:
-    with gzip.open(src, "rt", encoding="utf-8") as fh, dst.open("w", encoding="utf-8") as out:
+    with gzip.open(src, "rt", encoding="utf-8") as fh, dst.open(
+        "w", encoding="utf-8"
+    ) as out:
         header = next(fh)
         out.write(header)
         rows_written = 0
@@ -41,7 +44,9 @@ def preview_json(src: Path, dst: Path, n_records: int) -> int:
     with gzip.open(src, "rt", encoding="utf-8") as fh:
         records = json.load(fh)
     if not isinstance(records, list):
-        raise ValueError(f"{src.name}: expected top-level JSON array, got {type(records).__name__}")
+        raise ValueError(
+            f"{src.name}: expected top-level JSON array, got {type(records).__name__}"
+        )
     sample = records[:n_records]
     with dst.open("w", encoding="utf-8") as out:
         json.dump(sample, out, indent=2)

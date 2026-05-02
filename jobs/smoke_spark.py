@@ -9,10 +9,7 @@ from pyspark.sql.functions import explode, split
 
 
 def main() -> None:
-    spark = (
-        SparkSession.builder.appName("finpulse-smoke")
-        .getOrCreate()
-    )
+    spark = SparkSession.builder.appName("finpulse-smoke").getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
 
     df = spark.read.text("hdfs://namenode:9000/smoke/words.txt")
