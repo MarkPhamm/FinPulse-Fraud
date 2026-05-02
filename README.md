@@ -14,6 +14,26 @@ ODSC talks on building production data clusters with Spark, Kafka, Flink,
 Pinot, and Presto. The Robinhood reference architecture our diagrams
 trace lives at [`docs/odsc/robinhood_infrastructure.md`](docs/odsc/robinhood_infrastructure.md).
 
+## Architecture: Kappa, not Lambda
+
+![Lambda vs Kappa](images/architecture/lambda_vs_kappa.png)
+
+We follow **Kappa**. Kafka is the single source of truth for the
+`transactions` fact stream — both Spark (batch) and Flink (streaming)
+read from the same log. Spark is doing **offset-bounded replay** of
+events Flink consumes live; there's no separate "master dataset" in
+HDFS that batch rebuilds independently.
+
+Pinot's hybrid table can look Lambda-ish (real-time segments from Flink,
+offline segments from Spark), but in Kappa it's **tiered storage**, not
+a query-time merge of two parallel views: recent data lives in real-time
+segments, older data is compacted into offline segments by the nightly
+Spark job for read performance.
+
+HDFS still matters, but as **reference data** (the 4 dim datasets) and
+as the home for Spark's curated `/analytics/*` outputs — not as the
+canonical fact source. That's Kafka.
+
 ## Infrastructure
 
 What each component does in this stack:
