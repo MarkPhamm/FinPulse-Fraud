@@ -2,8 +2,9 @@
 
 ## Context
 
-The infrastructure is up and `make smoke && make smoke-airflow &&
-make smoke-pinot && make smoke-flink` all pass. The full local stack is:
+The infrastructure is up and `make smoke` passes (it exercises HDFS,
+Kafka, Spark, Airflow, Pinot, Flink, **and** the Spark→HMS→Presto
+round-trip end-to-end). The full local stack is:
 
 - **HDFS** (1 NameNode + 2 DataNodes) — dim landing + Spark analytics outputs.
 - **Spark** (1 master + 2 workers) — batch consumer of Kafka `transactions`
@@ -35,13 +36,15 @@ and seven business questions to answer. The rubric weights **feature
 engineering depth, class-imbalance awareness, real-time architecture
 quality, and dollar-impact framing** — not pure accuracy.
 
-This plan turns that brief into 12 small, observable steps so each new
-concept lands one at a time. Steps 1–8 + 11–12 implement the four
-stages; Steps 9, 9b, and 10 add **two complementary serving layers** —
-Pinot for pre-aggregated streaming (Step 9), PrestoDB-on-HMS for
-granular ad-hoc (Step 9b) — plus Superset on top of both at Step 10
-(per the Robinhood pattern in
-[`docs/odsc/robinhood_infrastructure.md`](../odsc/robinhood_infrastructure.md)).
+This plan turns that brief into **12 small, observable steps** so each
+new concept lands one at a time. **Steps are numbered in execution
+order**: completing 1 → 2 → 3 → … → 12 in sequence satisfies every
+prerequisite. Steps 1–7 + 11–12 implement the four brief stages;
+Steps 8–10 add the **two complementary serving layers** — Pinot for
+pre-aggregated streaming (Step 8), PrestoDB-on-HMS for granular ad-hoc
+(Step 9), Superset on top of both (Step 10) — per the Robinhood
+pattern in
+[`docs/odsc/robinhood_infrastructure.md`](../odsc/robinhood_infrastructure.md).
 Neither serving layer is strictly required by the brief, but together
 they make the real-time architecture credit easier to demonstrate and
 let the analysis notebook share a catalog with the dashboards. Every
@@ -90,15 +93,14 @@ read that diagram before starting any step.
 | ---- | ------------------------------------------------------------------------------- | ------------------------------------------ |
 | 0    | infra healthy                                                                   | (done)                                     |
 | 1    | `/landing/{customers,merchants,devices,fraud-reports}/` raw `.gz`               | zones, replication factors (txns NOT here) |
-| 2    | *(none — txns flow only through Kafka, no `/curated/transactions/`)*            | Kafka as source-of-truth for facts         |
-| 3    | `/curated/{devices,customers,merchants,fraud-reports}/`                         | JSON `multiLine`, dim vs fact              |
+| 2    | `/curated/{devices,customers,merchants,fraud-reports}/`                         | JSON `multiLine`, dim vs fact              |
+| 3    | Kafka producer replaying CSV → `transactions`                                   | partition keys, replay modes               |
 | 4    | `/analytics/transactions_enriched/` (Spark batch-reads Kafka + HDFS dims)       | Spark Kafka batch source, broadcast joins  |
 | 5    | `/analytics/customer_features/`                                                 | aggregations as features, approx aggs      |
 | 6    | rule-flagged + (optional) ML scored                                             | class imbalance, PR-AUC                    |
-| 7    | Kafka producer replaying CSV → `transactions`                                   | partition keys, replay modes               |
-| 8    | **Flink** `stream_score` → Kafka `transactions-scored` / `fraud-alerts`         | event-time, watermarks, broadcast state, exactly-once |
-| 9    | Pinot **hybrid table** (`transactions_scored`): real-time from Kafka + offline from HDFS | OLAP segments, hybrid tables, deep store   |
-| 9b   | HMS-registered Hive tables for `/curated/*` + `/analytics/*`; Presto serves them | catalog vs storage vs engine separation, lakehouse pattern |
+| 7    | **Flink** `stream_score` → Kafka `transactions-scored` / `fraud-alerts`         | event-time, watermarks, broadcast state, exactly-once |
+| 8    | Pinot **hybrid table** (`transactions_scored`): real-time from Kafka + offline from HDFS | OLAP segments, hybrid tables, deep store   |
+| 9    | HMS-registered Hive tables for `/curated/*` + `/analytics/*`; Presto serves them | catalog vs storage vs engine separation, lakehouse pattern |
 | 10   | Superset dashboards on the Pinot hybrid table **and** Presto Hive tables        | BI on two engines, picking one per question |
 | 11   | `daily_batch` + `streaming_monitor` DAGs                                        | quality gates, BashOperator pattern        |
 | 12   | `notebooks/analysis.ipynb` answering the 7 business questions                   | $-impact framing                           |
@@ -110,13 +112,67 @@ subscribe to the same `transactions` topic. The Kafka topic is the
 single source of truth; HDFS holds dimensions + Spark-derived
 analytics outputs.
 
-**Suggested execution order.** Steps don't strictly need to follow
-the numbered order, but a dependency-respecting sequence is:
-`1 → 3 → 7 → 4 → 5 → 6 → 8 → 9 → 9b → 10 → 11 → 12`. Step 7 (producer)
-must run before Step 4 (Spark batch read of Kafka) so the topic has
-data to consume. Step 9b can in principle run any time after Step 6,
-but is most useful right before Step 10 so Superset has *both*
-serving layers wired in one pass.
+---
+
+## Task DAG
+
+The dependency graph for the 12 steps. Steps along the same horizontal
+band can run in parallel; arrows are hard prerequisites.
+
+```mermaid
+graph TD
+    S0[0. Infrastructure DONE]:::done
+    S1[1. HDFS landing<br/>4 dim datasets]
+    S2[2. Curate dim Parquet]
+    S3[3. Kafka producer<br/>replay transactions]
+    S4[4. Enriched fact<br/>Spark × Kafka × HDFS dims]
+    S5[5. Customer features]
+    S6[6. Offline scoring<br/>rules + optional ML]
+    S7[7. Flink real-time scoring]
+    S8[8. Pinot hybrid table]
+    S9[9. Register HMS tables<br/>for Presto]
+    S10[10. Superset on both]
+    S11[11. Airflow DAGs]
+    S12[12. Analysis notebook]
+
+    S0 --> S1
+    S0 --> S3
+    S1 --> S2
+    S2 --> S4
+    S3 --> S4
+    S4 --> S5
+    S5 --> S6
+    S6 --> S7
+    S6 --> S9
+    S7 --> S8
+    S8 --> S10
+    S9 --> S10
+    S10 --> S11
+    S11 --> S12
+
+    classDef done fill:#d4edda,stroke:#28a745,color:#155724;
+```
+
+**Reading the DAG:**
+
+- **Step 0** is already done — every later step assumes the stack is up
+  and `make smoke` passes.
+- **Steps 1 and 3** can start in parallel right after the stack is up
+  (`hdfs dfs -put` on the dim files vs. publishing transactions to the
+  Kafka topic). Step 2 follows Step 1; Step 4 needs both branches.
+- **Steps 4 → 5 → 6** are a strict chain: enriched fact → features →
+  scored output, each consuming the previous step's Parquet.
+- **Step 6 fans out to Steps 7 and 9.** Step 7 (Flink) and Step 9
+  (HMS table registration) both depend on the offline scored output
+  but neither depends on the other — you can build them in parallel.
+- **Step 8 (Pinot) depends on Step 7** because the real-time path of
+  the hybrid table consumes the `transactions-scored` topic Flink
+  emits.
+- **Step 10 fans both Step 8 and Step 9 in** — Superset connects to
+  Pinot *and* Presto and one dashboard per access pattern.
+- **Steps 11 and 12** are the wrap-up: Airflow chains the batch
+  pipeline you've already proven works, and the notebook reads from
+  the same serving layers Superset uses.
 
 ---
 
@@ -160,11 +216,11 @@ zone is the immutable record of what the upstream provider gave us —
 no transforms, no schema changes.
 
 **`transactions.csv.gz` is deliberately NOT in this step.**
-Transactions are a Kafka-only stream (Step 7). The single source of
+Transactions are a Kafka-only stream (Step 3). The single source of
 truth for the transaction fact is the Kafka topic `transactions`, not
 HDFS. There will be no `/landing/transactions/` and no
 `/curated/transactions/`. Both batch (Spark, Step 4) and streaming
-(Flink, Step 8) consumers read from Kafka.
+(Flink, Step 7) consumers read from Kafka.
 
 **Concepts you'll meet for the first time.**
 
@@ -205,23 +261,11 @@ docker compose exec namenode hdfs dfs -stat "%r %n" /landing/fraud-reports/*
 
 ---
 
-## Step 2 — *removed*
+## Step 2 — Curate the dimension datasets
 
-Originally "Curate transactions to partitioned Parquet". Dropped
-because transactions never land in HDFS — they live only in Kafka,
-and Spark's batch read in Step 4 consumes them directly via the Kafka
-batch source (`spark.read.format("kafka").option("startingOffsets",
-"earliest").option("endingOffsets","latest")`).
-
-Step numbering is preserved so cross-references in older docs and
-commits still resolve.
-
----
-
-## Step 3 — Curate the four remaining datasets
-
-**Goal.** Same Parquet conversion for the other four, each with
-appropriate partitioning (or none, for small dimensions).
+**Goal.** Convert the four landing-zone files to partitioned Parquet
+in `/curated/`, each with appropriate partitioning (or none, for small
+dimensions).
 
 **Concepts.**
 
@@ -252,12 +296,84 @@ Files to add: `jobs/curate_devices.py`, `jobs/curate_customers.py`,
 **Verify.**
 
 ```sh
-for ds in transactions device-fingerprints customer-profiles merchant-directory fraud-reports; do
+for ds in device-fingerprints customer-profiles merchant-directory fraud-reports; do
   echo "=== $ds ==="
   docker compose exec namenode hdfs dfs -du -h /curated/$ds
 done
 # Expect: customer-profiles ≈ 5–10 MB, merchant-directory < 1 MB, etc.
 # Compression ratio vs landing should be ~3–5×.
+```
+
+---
+
+## Step 3 — Kafka producer: replay transactions as a stream
+
+**Goal.** A Python script that reads `transactions.csv.gz` and pushes
+each row to Kafka topic `transactions`, keyed by `card_id`. This step
+is the producer half of "Kafka is the source of truth for transactions";
+Step 4 (Spark batch read) and Step 7 (Flink stream read) both consume
+from this same topic.
+
+**Why this comes before Step 4.** Step 4 batch-reads the `transactions`
+topic by offset range. The topic must already have data in it for
+that read to return rows. Run this step at least once before Step 4.
+
+**Concepts.**
+
+- **Why key by `card_id`.** Same card → same Kafka partition →
+  preserved ordering. Velocity windows in Step 7 need this guarantee.
+- **Speed-vs-realism trade-off.** The 1M txns span 6 months of wall
+  time. Three replay modes:
+  1. **Throttled flat rate** (e.g. 200 txn/sec) — finishes in ~80
+     minutes, simple to reason about.
+  2. **Real-time replay** — emit at the timestamp's wall-clock offset
+     (×N speedup factor). Closer to production; harder to debug.
+  3. **Burst mode** — pump as fast as possible. Stress-tests the
+     downstream but doesn't exercise windowing.
+  Recommendation: ship mode 1 first, mode 2 as a `--speedup 60` flag.
+- **Idempotence and at-least-once.** `enable_idempotence=True` on the
+  producer prevents duplicates within a session; the consumer side
+  has to dedupe across producer restarts (we won't bother for the
+  class project).
+
+**What to build.**
+
+- `src/producer/replay_transactions.py`:
+  - CLI args: `--rate <txn/sec>`, `--limit <max>` (for testing).
+  - Read csv.gz with stdlib `csv` + `gzip`, no pandas needed.
+  - Use `confluent-kafka` or `kafka-python` (whichever you prefer; both
+    work). Bootstrap servers: `localhost:9092` from the host.
+  - Send JSON value, key = `card_id` bytes.
+- One-time topic config — long retention so Step 4 can batch-read
+  the full topic weeks later. Default Kafka retention is 7 days,
+  which silently truncates the historical record. Run once before
+  the first producer invocation:
+
+  ```sh
+  docker compose exec kafka /opt/kafka/bin/kafka-topics.sh \
+    --bootstrap-server kafka:9094 \
+    --create --if-not-exists --topic transactions \
+    --partitions 6 --replication-factor 1 \
+    --config retention.ms=-1 \
+    --config segment.bytes=104857600
+  ```
+
+  `retention.ms=-1` disables time-based deletion; the topic acts as
+  the long-term system of record for transactions, just like the
+  Robinhood pattern (their `transactions` Kafka topic feeds both
+  Pinot real-time ingest and the nightly Spark reconciliation).
+
+**Verify.**
+
+```sh
+# In one terminal, watch the topic in kafdrop:
+open http://localhost:9001
+
+# In another, run:
+python src/producer/replay_transactions.py --rate 100 --limit 1000
+
+# Confirm in kafdrop: 'transactions' topic has 1000 messages,
+# distributed across partitions, keyed by card_id.
 ```
 
 ---
@@ -311,14 +427,7 @@ table that downstream feature engineering and detection can read.
   - Write `/analytics/transactions_enriched/` partitioned by `dt`.
 
 **Prerequisite.** The `transactions` topic must already have data
-in it — run Step 7 (the producer) at least once before this. The
-recommended order is `1 → 3 → 7 → 4 → ...`.
-
-**Topic retention.** Make sure `transactions` is configured with
-long retention (e.g. `--config retention.ms=-1` to disable
-expiration, or 30+ days) so a re-run of Step 4 weeks later still
-sees every event. Default 7-day retention will silently truncate
-the historical record otherwise.
+in it — Step 3 (the producer) must run at least once before this.
 
 **Why batch-read Kafka instead of file-read the gz.** Kafka is the
 single source of truth for transactions; if Step 4 read the `.gz`
@@ -353,7 +462,7 @@ from to detect fraud.
 - **`approx_count_distinct` and `percentile_approx`** — exact distinct
   counts on 1M rows are expensive; approximate variants are usually
   ~1% off and 10× faster.
-- **Why a separate feature store.** The streaming job in Step 8 will
+- **Why a separate feature store.** The streaming job in Step 7 will
   broadcast-load this small Parquet to score every incoming txn. The
   goal is: cheap to read, fast to join, no PII beyond what scoring
   needs.
@@ -436,72 +545,7 @@ label using *imbalance-aware* metrics.
 
 ---
 
-## Step 7 — Kafka producer: replay transactions as a stream
-
-**Goal.** A Python script that reads `transactions.csv.gz` and pushes
-each row to Kafka topic `transactions`, keyed by `card_id`.
-
-**Concepts.**
-
-- **Why key by `card_id`.** Same card → same Kafka partition →
-  preserved ordering. Velocity windows in Step 8 need this guarantee.
-- **Speed-vs-realism trade-off.** The 1M txns span 6 months of wall
-  time. Three replay modes:
-  1. **Throttled flat rate** (e.g. 200 txn/sec) — finishes in ~80
-     minutes, simple to reason about.
-  2. **Real-time replay** — emit at the timestamp's wall-clock offset
-     (×N speedup factor). Closer to production; harder to debug.
-  3. **Burst mode** — pump as fast as possible. Stress-tests the
-     downstream but doesn't exercise windowing.
-  Recommendation: ship mode 1 first, mode 2 as a `--speedup 60` flag.
-- **Idempotence and at-least-once.** `enable_idempotence=True` on the
-  producer prevents duplicates within a session; the consumer side
-  has to dedupe across producer restarts (we won't bother for the
-  class project).
-
-**What to build.**
-
-- `src/producer/replay_transactions.py`:
-  - CLI args: `--rate <txn/sec>`, `--limit <max>` (for testing).
-  - Read csv.gz with stdlib `csv` + `gzip`, no pandas needed.
-  - Use `confluent-kafka` or `kafka-python` (whichever you prefer; both
-    work). Bootstrap servers: `localhost:9092` from the host.
-  - Send JSON value, key = `card_id` bytes.
-- One-time topic config — long retention so Step 4 can batch-read
-  the full topic weeks later. Default Kafka retention is 7 days,
-  which silently truncates the historical record. Run once before
-  the first producer invocation:
-
-  ```sh
-  docker compose exec kafka /opt/kafka/bin/kafka-topics.sh \
-    --bootstrap-server kafka:9094 \
-    --create --if-not-exists --topic transactions \
-    --partitions 6 --replication-factor 1 \
-    --config retention.ms=-1 \
-    --config segment.bytes=104857600
-  ```
-
-  `retention.ms=-1` disables time-based deletion; the topic acts as
-  the long-term system of record for transactions, just like the
-  Robinhood pattern (their `transactions` Kafka topic feeds both
-  Pinot real-time ingest and the nightly Spark reconciliation).
-
-**Verify.**
-
-```sh
-# In one terminal, watch the topic in kafdrop:
-open http://localhost:9001
-
-# In another, run:
-python src/producer/replay_transactions.py --rate 100 --limit 1000
-
-# Confirm in kafdrop: 'transactions' topic has 1000 messages,
-# distributed across partitions, keyed by card_id.
-```
-
----
-
-## Step 8 — Flink: real-time scoring (Kafka → Flink → Kafka)
+## Step 7 — Flink: real-time scoring (Kafka → Flink → Kafka)
 
 **Goal.** A long-lived **Flink** application that reads `transactions`,
 looks up the customer-features broadcast state, applies the rules
@@ -510,7 +554,7 @@ output topics:
 
 - `transactions-scored` — every txn with its rule columns and risk
   score (this is the audit-grade source-of-truth stream and the
-  topic Pinot's real-time table will consume in Step 9).
+  topic Pinot's real-time table will consume in Step 8).
 - `fraud-alerts` — only `risk_score >= 2`, payload tuned for live
   ops dashboards.
 
@@ -521,11 +565,6 @@ makes the case directly: only Flink is event-time native, true-streaming
 commit to Kafka, **and** millisecond latency — simultaneously.
 Compliance-grade financial analytics (which fraud is) needs event-time
 bucketing or you misattribute trades to the wrong window.
-
-**Prerequisite (one-time).** Add Flink to the docker-compose stack:
-`flink-jobmanager` + `flink-taskmanager` (image `flink:1.19-scala_2.12`),
-joined to the same network as Kafka, HDFS, and Pinot. Mount
-`./src/consumer/stream_score:/opt/flink/usrlib` for job submission.
 
 **Concepts.**
 
@@ -558,7 +597,9 @@ joined to the same network as Kafka, HDFS, and Pinot. Mount
   joins. Velocity is keyed (one stream). Customer/merchant lookups
   are broadcast state (control stream). Fact ↔ fact joins, if any
   are ever needed, will go in Pinot's multi-stage engine at query
-  time, not in Flink.
+  time, not in Flink. See
+  [`docs/infrastructure/flink.md`](../infrastructure/flink.md) for
+  the full rationale on broadcast vs. denormalize-upstream.
 
 **What to build.**
 
@@ -577,7 +618,7 @@ joined to the same network as Kafka, HDFS, and Pinot. Mount
   - Side output for events past the watermark, written to
     `hdfs://namenode:9000/analytics/late_events/` for the next
     Spark batch run to pick up.
-- Alert payload (unchanged from before):
+- Alert payload:
 
   ```json
   {"txn_id": "...", "card_id": "...", "event_time": "...",
@@ -618,7 +659,7 @@ across a savepoint-resume.
 
 ---
 
-## Step 9 — Pinot hybrid table: real-time from Kafka + offline from HDFS
+## Step 8 — Pinot hybrid table: real-time from Kafka + offline from HDFS
 
 **Goal.** Stand up one logical Pinot table `transactions_scored`
 backed by two physical tables — a real-time table fed by Kafka topic
@@ -674,7 +715,7 @@ ODSC talk, applied at our toy scale.
   `POST /tables`).
 - `jobs/build_pinot_offline_segments.py` — nightly Spark job that
   reads `/analytics/transactions_enriched/` plus the late-event side
-  output from Step 8, generates Pinot segment files via the Pinot
+  output from Step 7, generates Pinot segment files via the Pinot
   Spark plugin (or the controller's `/segments` upload endpoint),
   and uploads them to the offline table.
 - Wire `build_pinot_offline_segments.py` into the Airflow daily DAG
@@ -711,16 +752,16 @@ curl -fsS -X POST http://localhost:8099/query/sql \
 
 ---
 
-## Step 9b — Register the granular Hive tables for Presto
+## Step 9 — Register the granular Hive tables for Presto
 
 **Goal.** Make every dataset in `/curated/*` and `/analytics/*`
 queryable from Presto by registering it in the Hive Metastore.
-Pinot's hybrid table from Step 9 covers *pre-aggregated* questions;
+Pinot's hybrid table from Step 8 covers *pre-aggregated* questions;
 this step covers *granular ad-hoc SQL* over the same data lake — full
 row detail, arbitrary joins, second-scale latency. Same data, second
 access pattern.
 
-**Why this is its own step, not folded into 3–6.** Conceptually it's
+**Why this is its own step, not folded into 2–6.** Conceptually it's
 two extra characters per Spark write (`saveAsTable` instead of
 `parquet`), but it introduces a concept worth landing on its own:
 **catalog vs storage vs engine** are three independent concerns.
@@ -760,7 +801,7 @@ extending it to other tables is mechanical.
 There are two flavours of work, depending on whether each Spark job
 already exists.
 
-For *new* jobs in Steps 3–6, prefer `saveAsTable` from the start:
+For *new* jobs in Steps 2–6, prefer `saveAsTable` from the start:
 
 ```python
 spark = SparkSession.builder.enableHiveSupport().getOrCreate()
@@ -824,9 +865,9 @@ between the two engines in one verification.
 ## Step 10 — Superset dashboards on Pinot and Presto
 
 **Goal.** Bring Superset up, wire it to **both** serving layers — the
-Pinot hybrid table from Step 9 *and* the Hive tables registered with
-HMS in Step 9b — and build three dashboards that exercise the
-architecture. Step 9b's split (pre-aggregated streaming vs granular
+Pinot hybrid table from Step 8 *and* the Hive tables registered with
+HMS in Step 9 — and build three dashboards that exercise the
+architecture. The split (pre-aggregated streaming vs granular
 ad-hoc) determines which database each chart targets.
 
 ### 10a — Spin up Superset and confirm it's healthy
@@ -883,9 +924,9 @@ Once Superset is healthy, register **two** databases — one per engine.
    missing driver is the usual cause.)
 3. **Datasets → + Dataset**. Add at minimum:
    - Database = `Pinot — finpulse`, schema = `default`,
-     table = `transactions_scored` (logical hybrid name from Step 9).
+     table = `transactions_scored` (logical hybrid name from Step 8).
    - Database = `Presto — finpulse`, schema = `analytics`,
-     table = `transactions_enriched` (registered in Step 9b).
+     table = `transactions_enriched` (registered in Step 9).
 4. Confirm both dataset previews return rows (run the producer
    briefly if you want fresh data on the Pinot side).
 
@@ -947,7 +988,7 @@ required.
 **Goal.** Two DAGs:
 
 - `daily_batch` — chains Steps 1 → 6 plus the Pinot offline-segment
-  upload from Step 9, all gated on quality checks.
+  upload from Step 8, all gated on quality checks.
 - `streaming_monitor` (every 15 min) — checks Kafka consumer lag,
   Flink job liveness/checkpointing, and that `fraud-alerts` is
   producing within expected bounds.
@@ -1042,7 +1083,7 @@ answers the brief asks for. This is what the rubric calls out as
      rows vs population.
 - **Read via the serving layer, not path-based PySpark.** Same
   access pattern as Superset — Presto for granular SQL over
-  `/analytics/*` and `/curated/*` (registered in HMS by Step 9b),
+  `/analytics/*` and `/curated/*` (registered in HMS by Step 9),
   Pinot for pre-aggregated time-series. Both have Python clients
   that work in Jupyter:
 
@@ -1079,29 +1120,29 @@ Mapping back to the rubric in `docs/scenario.md`:
 
 | Rubric criterion | Where it lands |
 |---|---|
-| Stage 1 — Data Lake | Steps 1, 2, 3 |
+| Stage 1 — Data Lake | Steps 1, 2 |
 | Stage 2 — Spark Batch | Steps 4, 5, 6 |
-| Stage 3 — Streaming | Steps 7, 8 (Flink Kafka→Kafka), 9 (Pinot real-time ingest) |
+| Stage 3 — Streaming | Steps 3 (Kafka producer), 7 (Flink Kafka→Kafka), 8 (Pinot real-time ingest) |
 | Stage 4 — Orchestration | Step 11 |
-| Real-time analytics serving | Steps 9 (Pinot hybrid table), 9b (Presto-on-HMS for granular SQL), 10 (Superset on both) |
+| Real-time analytics serving | Steps 8 (Pinot hybrid table), 9 (Presto-on-HMS for granular SQL), 10 (Superset on both) |
 | Feature engineering depth | Step 5 (creativity), Step 6 (rules), Step 12 (analysis) |
 | Class-imbalance awareness | Step 6 (PR-AUC, threshold tuning), Step 12 (visuals) |
-| Real-time architecture | Step 8 (event-time, watermark, broadcast state, exactly-once), Step 9 (hybrid tables), Step 9b (HMS catalog separation — storage / catalog / engine) |
+| Real-time architecture | Step 7 (event-time, watermark, broadcast state, exactly-once), Step 8 (hybrid tables), Step 9 (HMS catalog separation — storage / catalog / engine) |
 | Business-impact framing | Step 10 (live dashboards), Step 12 (dollars per question) |
 
 **Rough effort estimate (assuming the project is the user's full focus):**
 
-- Step 1, 3: ~2–3 hours (mostly mechanical: 4 dim files, one per dataset).
+- Step 1, 2: ~2–3 hours (mostly mechanical: 4 dim files, one per dataset).
+- Step 3: ~2 hours (Kafka producer).
 - Step 4: ~2–3 hours (Spark Kafka batch source is new; the join logic is
   the same as a Parquet-only job).
 - Step 5: ~1–2 hours (windowed aggs).
 - Step 6: ~2–4 hours (rules quick, ML optional).
-- Step 7: ~2 hours.
-- Step 8: ~6–10 hours (Flink + event-time + exactly-once is the
+- Step 7: ~6–10 hours (Flink + event-time + exactly-once is the
   steepest ramp; budget extra if you've never written Flink before).
-- Step 9: ~3–5 hours (schema + table-config + Spark→Pinot segment job).
-- Step 9b: ~1–2 hours (swap path-based writes to `saveAsTable` in the
-  Steps 3–6 jobs; register external tables for any pre-existing
+- Step 8: ~3–5 hours (schema + table-config + Spark→Pinot segment job).
+- Step 9: ~1–2 hours (swap path-based writes to `saveAsTable` in the
+  Steps 2–6 jobs; register external tables for any pre-existing
   outputs via the Presto CLI). The HMS+Presto infra itself is
   already up — this is purely the table-registration pass.
 - Step 10: ~2–3 hours (Superset connection to **both** Pinot and
