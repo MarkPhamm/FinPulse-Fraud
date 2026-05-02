@@ -14,25 +14,35 @@ ODSC talks on building production data clusters with Spark, Kafka, Flink,
 Pinot, and Presto. The Robinhood reference architecture our diagrams
 trace lives at [`docs/odsc/robinhood_infrastructure.md`](docs/odsc/robinhood_infrastructure.md).
 
-## Architecture: Kappa, not Lambda
+## Architecture: Lambda
 
 ![Lambda vs Kappa](images/architecture/lambda_vs_kappa.png)
 
-We follow **Kappa**. Kafka is the single source of truth for the
-`transactions` fact stream — both Spark (batch) and Flink (streaming)
-read from the same log. Spark is doing **offset-bounded replay** of
-events Flink consumes live; there's no separate "master dataset" in
-HDFS that batch rebuilds independently.
+This stack is **Lambda**. Three layers, each owning a different concern:
 
-Pinot's hybrid table can look Lambda-ish (real-time segments from Flink,
-offline segments from Spark), but in Kappa it's **tiered storage**, not
-a query-time merge of two parallel views: recent data lives in real-time
-segments, older data is compacted into offline segments by the nightly
-Spark job for read performance.
+- **Batch layer (Spark)** — reads Kafka by offset range, joins with
+  HDFS dim tables, writes feature stores in `/analytics/*` and Pinot
+  offline segments. Owns historical correctness, ML training, and
+  heavy joins.
+- **Speed layer (Flink)** — continuously stream-scores Kafka events
+  with event-time semantics + exactly-once via two-phase commit, emits
+  `transactions-scored` and `fraud-alerts`. Owns low-latency freshness.
+- **Serving layer (Pinot hybrid table)** — merges Flink's real-time
+  segments with Spark's offline segments at query time. The classic
+  Lambda merge.
 
-HDFS still matters, but as **reference data** (the 4 dim datasets) and
-as the home for Spark's curated `/analytics/*` outputs — not as the
-canonical fact source. That's Kafka.
+The defining property: Spark and Flink run **different code paths
+with different logic** — Spark does batch feature engineering +
+offline scoring; Flink does stateful event-time scoring on the live
+stream. **Kappa** would be a *single* streaming codepath where "batch"
+just means replaying earlier Kafka offsets of the same job. We have
+two jobs, not one — that's Lambda.
+
+Spark batch-reading Kafka (instead of an HDFS master fact dataset) is
+a **modernization** of classic Lambda, not a switch to Kappa. We pay
+the Lambda tax — two codepaths to keep semantically aligned — to get
+Spark's batch flexibility *and* Flink's streaming semantics in the
+same stack.
 
 ## Infrastructure
 
