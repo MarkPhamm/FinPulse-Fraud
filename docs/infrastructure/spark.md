@@ -68,7 +68,7 @@ restarts.
 None — Spark master/workers don't ship with a stock health endpoint
 that's cheap to probe in this image. The smoke check
 (`make smoke-spark`) is the integration test: it submits
-`/opt/jobs/smoke_spark.py`, which reads from HDFS and asserts the
+`/opt/jobs/smoke/smoke_spark.py`, which reads from HDFS and asserts the
 expected word counts.
 
 ## Why this shape
@@ -126,7 +126,7 @@ Submit a vanilla batch job (HDFS-only):
 ```sh
 docker compose exec spark-master /opt/spark/bin/spark-submit \
     --master spark://spark-master:7077 \
-    /opt/jobs/<your_job>.py
+    /opt/jobs/<subdir>/<your_job>.py
 ```
 
 Submit a Kafka-source batch job (note `--packages`):
@@ -135,7 +135,7 @@ Submit a Kafka-source batch job (note `--packages`):
 docker compose exec spark-master /opt/spark/bin/spark-submit \
     --master spark://spark-master:7077 \
     --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1 \
-    /opt/jobs/<batch_kafka_job>.py
+    /opt/jobs/<subdir>/<batch_kafka_job>.py
 ```
 
 Open a PySpark REPL on the master (handy for poking at HDFS):

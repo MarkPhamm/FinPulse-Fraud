@@ -14,7 +14,7 @@ the Hive bridge JAR (same posture as the spark-sql-kafka connector):
     docker compose exec spark-master /opt/spark/bin/spark-submit \\
         --master spark://spark-master:7077 \\
         --packages org.apache.spark:spark-hive_2.12:3.5.3 \\
-        /opt/jobs/smoke_presto.py
+        /opt/jobs/smoke/smoke_presto.py
 """
 
 from pyspark.sql import SparkSession

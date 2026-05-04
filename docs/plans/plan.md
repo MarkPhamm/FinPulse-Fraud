@@ -62,8 +62,11 @@ read that diagram before starting any step.
 - Spark batch jobs run as `spark-submit --master spark://spark-master:7077`
   via `docker compose exec spark-master ...`. The Kafka source connector
   is not pre-baked, so any job that reads Kafka needs
-  `--packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1`. New
-  jobs land in `jobs/` next to the existing `smoke_spark.py`.
+  `--packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1`. Each
+  step's jobs live in their own sub-folder under `jobs/` (e.g.
+  `jobs/smoke/`, `jobs/curate/`); the whole `jobs/` tree is bind-mounted
+  at `/opt/jobs` inside the Spark containers, so submit paths are
+  `/opt/jobs/<subdir>/<file>.py`.
 - Flink streaming jobs run via `docker compose exec flink-jobmanager
   flink run -d /opt/flink/usrlib/<artifact>` with `./src/consumer/`
   bind-mounted at `/opt/flink/usrlib`. The Kafka connector ships with
@@ -290,8 +293,8 @@ dimensions).
 | `merchant-directory.csv.gz` | `/curated/merchant-directory/` | none | 10K rows = single file |
 | `fraud-reports.json.gz` | `/curated/fraud-reports/` | `fraud_type` | use `multiLine=true` |
 
-Files to add: `jobs/curate_devices.py`, `jobs/curate_customers.py`,
-`jobs/curate_merchants.py`, `jobs/curate_fraud_reports.py`.
+Files to add: `jobs/curate/curate_devices.py`, `jobs/curate/curate_customers.py`,
+`jobs/curate/curate_merchants.py`, `jobs/curate/curate_fraud_reports.py`.
 
 **Verify.**
 

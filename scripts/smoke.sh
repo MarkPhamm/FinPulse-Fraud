@@ -75,7 +75,7 @@ spark_smoke() {
     /opt/spark/bin/spark-submit \
         --master spark://spark-master:7077 \
         --conf spark.hadoop.fs.defaultFS=hdfs://namenode:9000 \
-        /opt/jobs/smoke_spark.py 2>&1
+        /opt/jobs/smoke/smoke_spark.py 2>&1
   ' | tee /tmp/finpulse-smoke-spark.log >/dev/null || die "spark-submit failed (see /tmp/finpulse-smoke-spark.log)"
 
   grep -q "SMOKE_OK total_words=6 distinct=3" /tmp/finpulse-smoke-spark.log \
@@ -160,7 +160,7 @@ presto_smoke() {
         --driver-memory 512m \
         --executor-memory 512m \
         --packages org.apache.spark:spark-hive_2.12:3.5.3 \
-        /opt/jobs/smoke_presto.py 2>&1
+        /opt/jobs/smoke/smoke_presto.py 2>&1
   ' | tee /tmp/finpulse-smoke-presto.log >/dev/null \
       || die "spark-submit smoke_presto.py failed (see /tmp/finpulse-smoke-presto.log)"
   grep -q 'smoke_presto OK' /tmp/finpulse-smoke-presto.log \
