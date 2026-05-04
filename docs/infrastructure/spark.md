@@ -119,6 +119,65 @@ real 2026 pressure on Spark comes from cloud warehouses
 (Snowflake, BigQuery, Databricks SQL) absorbing more of what used
 to be Spark's job — but those run SQL, not arbitrary Python/Scala.
 
+## Anatomy of a `spark-submit` invocation
+
+The canonical submit command is four pieces, each tied to a specific
+bit of the stack:
+
+```sh
+docker compose exec spark-master  /opt/spark/bin/spark-submit  --master spark://spark-master:7077  /opt/jobs/<subdir>/<your_job>.py
+└────────────┬─────────────────┘  └──────────┬───────────┘  └────────────────┬───────────────┘  └──────────────┬─────────────┘
+   step into the running         the Spark CLI that              tell the driver                       the script to run,
+   spark-master container        sends jobs to a cluster         which cluster to                      path is inside the
+   and run a command                                             join (RPC, not UI)                    container
+```
+
+| Piece | What it does | Why it looks the way it does |
+|-------|--------------|------------------------------|
+| `docker compose exec spark-master` | Run the next command inside the running `spark-master` container | Spark binaries aren't on your laptop, and the master RPC port is in-network only — so the submit has to originate from inside the docker network. |
+| `/opt/spark/bin/spark-submit` | Launches a Spark **driver** JVM that connects to the master and dispatches work to executors | `apache/spark:3.5.3-python3` installs Spark at `/opt/spark/`. (Other images vary — `ls /opt/spark/bin/` to confirm.) |
+| `--master spark://spark-master:7077` | Tells the driver which cluster manager to join | `spark://` = Spark's standalone manager. The hostname `spark-master` resolves only on the `finpulse` docker network (Compose registers each service name as DNS). `7077` is the master's RPC port; the web UI on `8080` is a different port for a different protocol. |
+| `/opt/jobs/<subdir>/<your_job>.py` | The script the driver loads | Path **inside the container**. The bind mount `./jobs:/opt/jobs` (compose `volumes:` block) mounts the *whole* `jobs/` tree, so each step's sub-folder (`smoke/`, `curate/`, …) is visible at `/opt/jobs/<subdir>/`. The mount is live — editing on the host updates the container view immediately, no rebuild needed. |
+
+### What happens after you press enter
+
+1. The Docker daemon execs `spark-submit` inside `spark-master`.
+2. spark-submit boots a Spark **driver** JVM in the same container
+   (this is *client* deploy mode, the default).
+3. The driver opens a TCP connection to `spark-master:7077` — the
+   master process is in the *same* container (started by the
+   `command:` block in compose), but the driver still talks to it
+   over the cluster RPC like any other client would.
+4. Master assigns executors on `spark-worker-1` and `spark-worker-2`.
+5. Driver reads `/opt/jobs/<subdir>/<your_job>.py`
+   (= `./jobs/<subdir>/<your_job>.py` on your host), runs it, ships
+   pickled task closures to the executors. PySpark workers run Python
+   over py4j.
+6. Output streams back to your terminal; the exec session ends when
+   the script returns.
+
+### Other `--master` values you'll see in the wild
+
+- `local[*]` — no cluster; driver + executors in one JVM. Useful for
+  unit tests.
+- `yarn` — submit to a YARN cluster. Expects YARN config in
+  `HADOOP_CONF_DIR`.
+- `k8s://https://kube-api:6443` — submit to Kubernetes. Spark spawns
+  one pod per executor.
+- `mesos://...` — Mesos cluster. Mostly historical.
+
+We use `spark://` because the compose stack runs Spark's own
+standalone cluster manager (no YARN, no k8s).
+
+### Why workers also bind-mount `./jobs:/opt/jobs`
+
+In client deploy mode the driver ships pickled task closures, so
+workers don't strictly need the script file. The mount is on workers
+anyway because (a) it's harmless symmetry across the same image,
+(b) some jobs read sibling files relatively (a SQL template next to
+the Python), and (c) switching to *cluster* deploy mode (driver runs
+on a worker) would otherwise silently break.
+
 ## Common commands
 
 Submit a vanilla batch job (HDFS-only):
