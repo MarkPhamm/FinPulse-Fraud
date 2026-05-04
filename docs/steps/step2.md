@@ -225,7 +225,7 @@ docker compose exec namenode hdfs dfs -du -h \
 Expected: one `part-*.snappy.parquet` plus `_SUCCESS`; Parquet
 directory ~30–50 KB (vs ~140 KB landing).
 
-Commit as `step 2a: curate merchant-directory to Parquet`.
+Commit as `step 2b: curate merchant-directory to Parquet`.
 
 ## 2c — Add partitioning: `curate_devices.py`
 
