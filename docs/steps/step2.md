@@ -109,7 +109,7 @@ make smoke-spark
 If pre-flight fails, fix that before starting — every sub-step assumes
 this baseline.
 
-## 2a — Read one file by hand in a PySpark shell
+## Warmup — Read one file by hand in a PySpark shell
 
 Before writing any job file, open an interactive PySpark shell inside
 the master container and round-trip **one** file. Picking the smallest
@@ -157,15 +157,15 @@ You should see one `*.snappy.parquet` file (plus a `_SUCCESS` marker)
 in `/curated/merchant-directory/`, and the `du` line should be ~3–5×
 smaller than the landing-zone gz.
 
-If 2a worked, exit the shell with `Ctrl+D`. The remaining sub-steps
+If the warmup worked, exit the shell with `Ctrl+D`. The remaining sub-steps
 turn this round-trip into four small job files.
 
-## 2b — First curate job: `curate_merchants.py` (no partitioning)
+## 2a — First curate job: `curate_merchants.py` (no partitioning)
 
 Create `jobs/curate/curate_merchants.py`. Mirror the
 [`jobs/smoke/smoke_spark.py`](../../jobs/smoke/smoke_spark.py) shape:
 module docstring → `main()` → `if __name__ == "__main__"`. The body is
-the same three calls you ran in 2a (read → write → stop), wrapped so
+the same three calls you ran in the warmup (read → write → stop), wrapped so
 `spark-submit` can drive it.
 
 Skeleton you'll fill in:
@@ -225,11 +225,11 @@ docker compose exec namenode hdfs dfs -du -h \
 Expected: one `part-*.snappy.parquet` plus `_SUCCESS`; Parquet
 directory ~30–50 KB (vs ~140 KB landing).
 
-Commit as `step 2b: curate merchant-directory to Parquet`.
+Commit as `step 2a: curate merchant-directory to Parquet`.
 
-## 2c — Add partitioning: `curate_devices.py`
+## 2b — Add partitioning: `curate_devices.py`
 
-Same shape as 2b, with two changes:
+Same shape as 2a, with two changes:
 
 ```python
 LANDING = "hdfs://namenode:9000/landing/device-fingerprints/device-fingerprints.csv.gz"
@@ -263,7 +263,7 @@ sub-dirs, each with one tiny file — the small-files problem.
 
 Commit as `step 2b: curate device-fingerprints partitioned by device_type`.
 
-## 2d — JSON `multiLine`: `curate_customers.py`
+## 2c — JSON `multiLine`: `curate_customers.py`
 
 The two changes here are the reader (`.json` instead of `.csv`) and
 adding `multiLine=true`. Try **without** `multiLine` first if you
@@ -316,7 +316,7 @@ needs to read it correctly.
 Submit + verify the same way. Commit as
 `step 2c: curate customer-profiles (multiLine JSON)`.
 
-## 2e — Combine both: `curate_fraud_reports.py`
+## 2d — Combine both: `curate_fraud_reports.py`
 
 Last one — apply 2c (multiLine) and 2b (partitioning) together.
 
