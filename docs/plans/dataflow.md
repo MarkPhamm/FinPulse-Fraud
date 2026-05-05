@@ -364,9 +364,16 @@ Kafka 'transactions'  ───────────────────�
    - Dimensions (`customer-profiles`, `merchant-directory`) — no
      partitioning, they're small and always broadcast-joined.
    - `fraud-reports` partitioned by `fraud_type`.
-   - **Why Parquet.** Columnar means we only read the columns we
-     need; predicate pushdown means filters happen before
-     deserialization; ~5–10× smaller than gzipped CSV.
+   - **Why Parquet.** Columnar reads (only the columns the query
+     needs), predicate pushdown (filters evaluated against row-group
+     min/max stats before decompression), splittable per row group
+     (one file parallelises across executors; a `.csv.gz` cannot),
+     and schema preserved through the round-trip. **On disk it's
+     roughly the same size as gzipped CSV — sometimes slightly
+     larger** — so this is an access-pattern decision, not a storage
+     one. The downstream consumers (Step 4 Spark joins, Step 8 Pinot
+     offline segments, Step 9 Presto/HMS) are all easier *because*
+     the data is Parquet.
 
 3. **Kafka `transactions` + `/curated/*` → `/analytics/transactions_enriched`** *(Step 4)*
    - Spark batch job. The transaction side comes from Kafka:

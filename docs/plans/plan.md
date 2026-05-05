@@ -303,8 +303,11 @@ for ds in device-fingerprints customer-profiles merchant-directory fraud-reports
   echo "=== $ds ==="
   docker compose exec namenode hdfs dfs -du -h /curated/$ds
 done
-# Expect: customer-profiles ≈ 5–10 MB, merchant-directory < 1 MB, etc.
-# Compression ratio vs landing should be ~3–5×.
+# Expect: customer-profiles ≈ 2–3 MB, merchant-directory ~200 KB, etc.
+# Sizes are roughly comparable to the landing gz, sometimes slightly
+# larger — gzip is a strong compressor and Parquet's win here is
+# access pattern (columnar reads, predicate pushdown, splittable per
+# row group), not on-disk size. See docs/steps/step2.md § Concepts.
 ```
 
 ---

@@ -23,9 +23,14 @@ and what's partition-worthy:
 | `/landing/customer-profiles/customer-profiles.json.gz`         | `/curated/customer-profiles/`     | none           | gzip JSON-array → Parquet; needs `multiLine=true`; `typical_categories` stays as `array<string>` |
 | `/landing/fraud-reports/fraud-reports.json.gz`                 | `/curated/fraud-reports/`         | `fraud_type`   | gzip JSON-array → Parquet; needs `multiLine=true` |
 
-Compression ratio you should see vs landing: roughly **3–5× smaller**
-on Parquet (Snappy + columnar). The two CSVs come down hardest because
-their rows are highly repetitive across columns.
+**Don't expect the Parquet output to be dramatically smaller than the
+landing `.gz`.** gzip is a strong general-purpose compressor; on
+narrow tables Snappy-Parquet often comes in **about the same size or
+slightly larger**, and only wins on wide tables with highly repetitive
+columns. **File size isn't why we're moving to Parquet here** — the
+wins are downstream (see *Concepts → Why Parquet, not gzip-CSV/JSON*
+below). Steps 4, 8, and 9 are all easier *because* the data is
+Parquet, regardless of whether it shrunk.
 
 ## What this step does NOT do
 
@@ -78,11 +83,29 @@ their rows are highly repetitive across columns.
   `/landing` is immutable; `/curated` is rebuildable from `/landing`.
   Overwriting `/curated/<dataset>/` on every run is intentional — the
   job is idempotent because the inputs are immutable.
-- **Parquet vs gzip.** gzip-CSV is row-oriented and opaque to Spark
-  beyond decompression. Parquet is columnar with per-column
-  compression and statistics, so `select country` reads only the
-  `country` column and a predicate like `risk_score >= 8` can prune
-  whole row groups via min/max stats.
+- **Why Parquet, not gzip-CSV/JSON.** Not because Parquet is smaller —
+  often it isn't (gzip is genuinely good). The reasons are
+  access-pattern, all paying off in later steps:
+  - **Columnar reads.** `select country, risk_score` reads only those
+    two columns off disk. CSV has to scan every byte of every row to
+    find the column boundaries.
+  - **Predicate pushdown.** `where risk_score >= 8` is evaluated
+    against per-row-group min/max stats stored in the Parquet
+    footer; non-matching row groups are skipped without ever being
+    decompressed.
+  - **Splittable.** Spark hands different row groups in the same
+    file to different executors in parallel. A `.csv.gz` is opaque
+    to the splitter — one task has to decompress it from the top.
+  - **Schema preserved.** Types, nullability, and nested structures
+    (the `typical_categories` array, eventual timestamps) survive a
+    round-trip; no re-running `inferSchema` on every read.
+  - **Partition pruning.** Paired with `partitionBy()`, Spark skips
+    whole `<col>=<value>/` sub-directories at plan time before any
+    file is opened.
+  - **Step 4** (Spark joins on `/curated/*`), **Step 8** (Pinot
+    offline segments built from Parquet), and **Step 9** (Presto-on-
+    HMS reading `/curated/*` directly) all consume these files, and
+    all of them benefit from the bullets above. That's the payoff.
 
 ## Pre-flight
 
@@ -154,8 +177,10 @@ docker compose exec namenode hdfs dfs -du -h /landing/merchant-directory /curate
 ```
 
 You should see one `*.snappy.parquet` file (plus a `_SUCCESS` marker)
-in `/curated/merchant-directory/`, and the `du` line should be ~3–5×
-smaller than the landing-zone gz.
+in `/curated/merchant-directory/`. The `du` line will be **roughly
+the same size** as the landing gz, maybe slightly larger — that's
+expected (see *Concepts → Why Parquet*). What we care about is that
+the file exists, parses back, and round-trips the row count.
 
 If the warmup worked, exit the shell with `Ctrl+D`. The remaining sub-steps
 turn this round-trip into four small job files.
@@ -358,7 +383,8 @@ After all four jobs have run at least once:
 # 1. Tree of /curated/ — expect 4 dirs, none called transactions.
 docker compose exec namenode hdfs dfs -ls /curated
 
-# 2. Sizes — Parquet should be 3–5× smaller than landing.
+# 2. Sizes — sanity check only. Parquet won't be dramatically smaller
+#    than gzip; sometimes it's slightly larger. See Concepts → Why Parquet.
 for ds in merchant-directory device-fingerprints customer-profiles fraud-reports; do
   echo "=== $ds ==="
   docker compose exec namenode hdfs dfs -du -h /landing/$ds  /curated/$ds
@@ -388,8 +414,12 @@ drwxr-xr-x   - root supergroup    /curated/fraud-reports
 drwxr-xr-x   - root supergroup    /curated/merchant-directory
 
 $ docker compose exec namenode hdfs dfs -du -h /landing/customer-profiles /curated/customer-profiles
-2.8 M  /landing/customer-profiles
-0.7 M  /curated/customer-profiles      # ~4× smaller, typical
+2.7 M  /landing/customer-profiles
+2.3 M  /curated/customer-profiles      # roughly the same — Parquet's win is downstream, not on disk
+
+$ docker compose exec namenode hdfs dfs -du -h /landing/merchant-directory /curated/merchant-directory
+140.0 K  /landing/merchant-directory
+201.0 K  /curated/merchant-directory   # Parquet slightly larger here on a tiny narrow table — also fine
 ```
 
 Row counts back from Parquet match the row counts the generator
