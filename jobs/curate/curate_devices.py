@@ -1,4 +1,4 @@
-"""Curate merchant-directory: gzip CSV at /landing → Parquet at /curated.
+"""Curate device-fingerprints: gzip CSV at /landing → Parquet at /curated.
 
 Big dimension (~600K rows) — partitioned by device_type.
 """
