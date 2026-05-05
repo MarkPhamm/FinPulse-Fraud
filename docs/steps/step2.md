@@ -132,6 +132,13 @@ make smoke-spark
 If pre-flight fails, fix that before starting — every sub-step assumes
 this baseline.
 
+What a clean pre-flight looks like: `/landing` has the four dimension
+directories from Step 1, all three Spark services are `Up`, and
+`make smoke-spark` ends with the green **OK: Spark + HDFS integration
+works** line.
+
+![pre-flight: 4 dim dirs, Spark cluster up, smoke-spark green](../../images/steps/step2/service_healthy.png)
+
 ## Warmup — Read one file by hand in a PySpark shell
 
 Before writing any job file, open an interactive PySpark shell inside
@@ -181,6 +188,13 @@ in `/curated/merchant-directory/`. The `du` line will be **roughly
 the same size** as the landing gz, maybe slightly larger — that's
 expected (see *Concepts → Why Parquet*). What we care about is that
 the file exists, parses back, and round-trips the row count.
+
+What the warmup looks like end-to-end inside the pyspark shell — read
+the gz CSV, inspect the inferred schema (7 columns, all typed),
+preview a few rows, count = 10000, write Parquet, then re-read and
+confirm 10000 rows back:
+
+![warmup: pyspark shell round-trip on merchant-directory](../../images/steps/step2/step2a.png)
 
 If the warmup worked, exit the shell with `Ctrl+D`. The remaining sub-steps
 turn this round-trip into four small job files.
@@ -247,8 +261,15 @@ docker compose exec namenode hdfs dfs -du -h \
     /landing/merchant-directory /curated/merchant-directory
 ```
 
-Expected: one `part-*.snappy.parquet` plus `_SUCCESS`; Parquet
-directory ~30–50 KB (vs ~140 KB landing).
+Expected: one `part-*.snappy.parquet` plus `_SUCCESS`. Size lands
+around ~200 KB (vs ~140 KB landing — see *Concepts → Why Parquet*
+for why curated isn't smaller).
+
+A successful run printing the schema + `wrote Parquet to ...`,
+followed by `hdfs dfs -ls -R /curated/merchant-directory` showing
+the `_SUCCESS` marker and one `part-…snappy.parquet` file:
+
+![step 2a: spark-submit output + HDFS listing of /curated/merchant-directory](../../images/steps/step2/step2b.png)
 
 Commit as `step 2a: curate merchant-directory to Parquet`.
 
