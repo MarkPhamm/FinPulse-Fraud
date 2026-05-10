@@ -639,6 +639,8 @@ card, still spread across 6 partitions.
 
 Commit as `step 3d: add --rate and --limit flags to replay_transactions`.
 
+![step 3d: `--rate 100 --limit 1000` finishes in ~10s at ~100 msg/s; Kafdrop shows the topic now holds ~1,100 keyed messages spread across all 6 partitions](../../images/steps/step3/step3d.png)
+
 ## 3e — Full 1M replay
 
 With small-batch verification working, kick off the full replay. At
@@ -670,6 +672,8 @@ deduplicate downstream. (If you want a clean 1M, delete the topic
 first: `kafka-topics.sh --delete --topic transactions` then redo 3b.)
 
 Commit as `step 3e: full transactions replay into Kafka`.
+
+![step 3e: full `--rate 1000` replay running; producer stdout prints periodic msg/s progress and Kafdrop's transaction count climbs toward ~1M](../../images/steps/step3/step3e.png)
 
 ## Verification
 
@@ -729,6 +733,8 @@ CARD-043960 | {"txn_id":"TXN-0000001","timestamp":"2025-06-15 09:59:52",
               "card_id":"CARD-043960","merchant_id":"MERCH-09873",
               "amount":"179.84","currency":"USD",...}
 ```
+
+![verification: all five checks green — describe shows 6 partitions with the right configs, get-offsets sums to ~1M evenly across partitions, console-consumer prints keyed JSON, and `/landing` has no transactions directory](../../images/steps/step3/verification.png)
 
 ## Troubleshooting
 
