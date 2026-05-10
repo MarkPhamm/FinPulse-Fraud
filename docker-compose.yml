@@ -769,3 +769,37 @@ services:
       timeout: 5s
       retries: 18
       start_period: 30s
+
+  # ---------- Producer ------------------------------------------------------
+  # Python container that streams data/transactions.csv.gz into the Kafka topic
+  # 'transactions'. Containerised so the host stays Python-dep-free; same posture
+  # as the rest of the stack. kafka-python installs at container startup (mirrors
+  # the Superset requirements-local.txt pattern — fetch one dep at boot rather than
+  # baking an image for it). Idle on `sleep infinity` so you can drive it via `compose exec`.
+  #
+  # Image: python:3.11-slim — bare-bones Python image.
+  #
+  # Volume: ./src/producer — code to stream data/transactions.csv.gz into Kafka.
+  #
+  # Volume: ./data — data/transactions.csv.gz to stream.
+  #
+  # Depends on: kafka — must be healthy before the producer can start.
+  #
+  # Networks: [finpulse] — same network as the rest of the stack.
+  #
+  # Restart: unless-stopped — restart the container if it crashes.
+  producer:
+    image: python:3.11-slim
+    container_name: producer
+    command:
+      - sh
+      - -c
+      - "pip install --no-cache-dir kafka-python==2.0.2 && exec sleep infinity"
+    volumes:
+      - ./src/producer:/opt/producer:ro
+      - ./data:/data:ro
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [finpulse]
+    restart: unless-stopped
