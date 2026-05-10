@@ -683,8 +683,7 @@ docker compose exec kafka /opt/kafka/bin/kafka-topics.sh \
 # expect: PartitionCount: 6, retention.ms=-1, segment.bytes=104857600
 
 # 2. Topic has ~1M messages, distributed across all 6 partitions.
-docker compose exec kafka /opt/kafka/bin/kafka-run-class.sh \
-    kafka.tools.GetOffsetShell \
+docker compose exec kafka /opt/kafka/bin/kafka-get-offsets.sh \
     --bootstrap-server kafka:9094 --topic transactions
 # expect: 6 lines, one per partition, each with offset > 0,
 #         summing to ~1,000,000 (or more, if you re-ran after 3b).
@@ -716,7 +715,7 @@ Topic: transactions  PartitionCount: 6  ReplicationFactor: 1
   Topic: transactions  Partition: 0  Leader: 0  ...
   ... (6 partition lines)
 
-$ GetOffsetShell --topic transactions
+$ kafka-get-offsets.sh --topic transactions
 transactions:0:166842
 transactions:1:166703
 transactions:2:166791
