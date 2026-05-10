@@ -168,6 +168,8 @@ you'll also see `__transaction_state` show up.
 If you ever want only the user topics, the idiom is
 `kafka-topics.sh --list | grep -v '^__'`.
 
+![pre-flight: kafka/kafdrop healthy, smoke-kafka green, no transactions topic yet, no producer service, kafdrop reachable](../../images/steps/step3/pre_flight.png)
+
 ## Warmup — Hand-roll one produce/consume round-trip
 
 Before touching Python, send and receive one message using Kafka's
@@ -293,6 +295,8 @@ The remaining sub-steps turn this round-trip into a Python script that
 reads the CSV, JSON-encodes each row, keys by `card_id`, and pushes
 all 1M rows into a properly-configured `transactions` topic.
 
+![warmup: console consumer prints the three keyed records as the heredoc producer pushes them; both `CARD-001` rows would land on the same partition in Kafdrop](../../images/steps/step3/warmup.png)
+
 ## 3a — Add a `producer` compose service
 
 Everything else in this stack runs in a container — Spark, Flink,
@@ -369,6 +373,8 @@ docker compose exec producer ls /opt/producer  /data
 
 Commit as `step 3a: add producer compose service`.
 
+![step 3a: producer container Running, kafka-python 2.0.2 importable inside it, /opt/producer and /data bind-mounts visible](../../images/steps/step3/step3a.png)
+
 ## 3b — Create the `transactions` topic (one-time)
 
 The topic must exist before the producer can write to it, and it must
@@ -415,6 +421,8 @@ a no-op. We don't ship a Python wrapper for it; one-shot infra setup
 is fine as a hand-run command, like Step 0's `make hive-deps`.
 
 Commit as `step 3b: create transactions Kafka topic`.
+
+![step 3b: --create returns "Created topic transactions"; --describe confirms 6 partitions, RF=1, retention.ms=-1, segment.bytes=104857600](../../images/steps/step3/step3b.png)
 
 ## 3c — Minimal producer: read CSV → JSON → Kafka
 
@@ -549,6 +557,8 @@ because hashing is not uniform on small samples).
 Remove the temporary `break` once you've seen this work.
 
 Commit as `step 3c: minimal Kafka producer for transactions`.
+
+![step 3c: console consumer prints 5 keyed JSON records from the `transactions` topic and exits cleanly](../../images/steps/step3/step3c.png)
 
 ## 3d — Add `--rate` and `--limit`
 
