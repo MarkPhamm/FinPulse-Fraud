@@ -544,6 +544,16 @@ services:
     image: flink:1.19.1-scala_2.12-java11
     container_name: flink-jobmanager
     hostname: flink-jobmanager
+    # The flink-data named volume mounts as root:root, but the Flink JVM runs
+    # as the unprivileged `flink` user and must create checkpoint/savepoint
+    # subdirs there. Start as root, chown the volume, then hand off to the
+    # stock entrypoint (which gosu-drops back to `flink`). Durable across nuke.
+    user: "0:0"
+    entrypoint:
+      - /bin/bash
+      - -c
+      - chown -R flink:flink /opt/flink/data && exec /docker-entrypoint.sh "$@"
+      - bash
     command: jobmanager
     environment:
       # Multi-line env value: FLINK_PROPERTIES is appended to flink-conf.yaml
@@ -561,8 +571,12 @@ services:
       - "8082:8081"   # Flink web UI (8081 is Airflow's)
     volumes:
       - flink-data:/opt/flink/data
-      - ./src/consumer:/opt/flink/usrlib:ro    # job artifacts (Step 8)
+      - ./src/consumer:/opt/flink/usrlib:ro    # job artifacts (Step 7)
       - ./docker/hadoop-client:/opt/hadoop-conf:ro   # HDFS client config
+      # Kafka SQL connector — not bundled in the base image. Fetched by
+      # `make flink-deps` into docker/flink/lib/ and overlaid into the
+      # Flink lib dir so sql-client / job classpath can see it.
+      - ./docker/flink/lib/flink-sql-connector-kafka-3.2.0-1.19.jar:/opt/flink/lib/flink-sql-connector-kafka.jar:ro
     depends_on:
       kafka:
         condition: service_healthy
@@ -578,6 +592,12 @@ services:
     image: flink:1.19.1-scala_2.12-java11
     container_name: flink-taskmanager
     hostname: flink-taskmanager
+    user: "0:0"
+    entrypoint:
+      - /bin/bash
+      - -c
+      - chown -R flink:flink /opt/flink/data && exec /docker-entrypoint.sh "$@"
+      - bash
     command: taskmanager
     environment:
       FLINK_PROPERTIES: |
@@ -591,6 +611,7 @@ services:
       - flink-data:/opt/flink/data
       - ./src/consumer:/opt/flink/usrlib:ro
       - ./docker/hadoop-client:/opt/hadoop-conf:ro
+      - ./docker/flink/lib/flink-sql-connector-kafka-3.2.0-1.19.jar:/opt/flink/lib/flink-sql-connector-kafka.jar:ro
     depends_on:
       flink-jobmanager:
         condition: service_healthy

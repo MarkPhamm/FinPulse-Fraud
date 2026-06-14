@@ -231,6 +231,10 @@ metastore_db/
 # Track the directory + .gitkeep, exclude the .jar.
 docker/hive-metastore/jars/*.jar
 
+# Flink SQL Kafka connector (downloaded by `make flink-deps`).
+# Track the directory + .gitkeep, exclude the .jar.
+docker/flink/lib/*.jar
+
 # ---- Editor / OS ----
 .DS_Store
 .idea/

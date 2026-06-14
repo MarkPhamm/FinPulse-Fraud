@@ -7,12 +7,19 @@ COMPOSE ?= docker compose
 HIVE_PG_JAR_VERSION := 42.7.2
 HIVE_PG_JAR_PATH    := docker/hive-metastore/jars/postgresql-$(HIVE_PG_JAR_VERSION).jar
 
-.PHONY: help env hive-deps up up-core up-bi up-stream up-dwh down stop logs ps smoke smoke-hdfs smoke-kafka smoke-spark smoke-airflow smoke-pinot smoke-flink smoke-presto nuke
+# Flink SQL Kafka connector (downloaded by `make flink-deps`). The base
+# flink:1.19 image does NOT bundle a Kafka connector — only the files
+# connector — so any Kafka source/sink job needs this jar on the classpath.
+FLINK_KAFKA_JAR_VERSION := 3.2.0-1.19
+FLINK_KAFKA_JAR_PATH    := docker/flink/lib/flink-sql-connector-kafka-$(FLINK_KAFKA_JAR_VERSION).jar
+
+.PHONY: help env hive-deps flink-deps up up-core up-bi up-stream up-dwh down stop logs ps smoke smoke-hdfs smoke-kafka smoke-spark smoke-airflow smoke-pinot smoke-flink smoke-presto nuke
 
 help:
 	@echo "Targets:"
 	@echo "  env           Create .env from .env.example with your UID"
 	@echo "  hive-deps     Download Postgres JDBC driver for the Hive Metastore (one-time, ~1.2 MB)"
+	@echo "  flink-deps    Download the Flink SQL Kafka connector jar (one-time, ~5 MB)"
 	@echo "  up            Start the full stack (HDFS + Spark + Kafka + Airflow + Pinot + Superset + Flink + HMS + PrestoDB)"
 	@echo "  up-core       Start only HDFS + Spark + Kafka (skip Airflow / Pinot / Superset / Flink / HMS / Presto)"
 	@echo "  up-bi         Start the BI/serving layers (Pinot + Superset + HMS + Presto)"
@@ -46,7 +53,17 @@ hive-deps:
 	    -o $(HIVE_PG_JAR_PATH); \
 	fi
 
-up:
+flink-deps:
+	@mkdir -p $(dir $(FLINK_KAFKA_JAR_PATH))
+	@if [ -f $(FLINK_KAFKA_JAR_PATH) ]; then \
+	  echo "$(FLINK_KAFKA_JAR_PATH) already present"; \
+	else \
+	  echo "Downloading flink-sql-connector-kafka-$(FLINK_KAFKA_JAR_VERSION).jar -> $(FLINK_KAFKA_JAR_PATH)"; \
+	  curl -fsSL "https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/$(FLINK_KAFKA_JAR_VERSION)/flink-sql-connector-kafka-$(FLINK_KAFKA_JAR_VERSION).jar" \
+	    -o $(FLINK_KAFKA_JAR_PATH); \
+	fi
+
+up: hive-deps flink-deps
 	$(COMPOSE) up -d
 
 up-core:
@@ -56,7 +73,7 @@ up-bi: hive-deps
 	$(COMPOSE) up -d pinot-zookeeper pinot-controller pinot-broker pinot-server superset \
 	    metastore-db hive-metastore-init hive-metastore presto-coordinator
 
-up-stream:
+up-stream: flink-deps
 	$(COMPOSE) up -d kafka kafdrop flink-jobmanager flink-taskmanager
 
 up-dwh: hive-deps
