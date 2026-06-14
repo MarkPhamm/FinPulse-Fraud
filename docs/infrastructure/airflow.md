@@ -37,7 +37,7 @@ volumes, and user. The non-default knobs:
 | `AIRFLOW__CORE__LOAD_EXAMPLES`                  | `false`                                                    | No clutter in the UI                                             |
 | `AIRFLOW__WEBSERVER__SECRET_KEY`                | `dev-secret-key-change-me`                                 | Dev placeholder — rotate for any non-local use                   |
 | `AIRFLOW__API__AUTH_BACKENDS`                   | `basic_auth,session`                                       | Lets the smoke check call `airflow dags trigger` over the REST API |
-| `_PIP_ADDITIONAL_REQUIREMENTS`                  | from `.env`                                                | Optional pip add-ons applied at container start                  |
+| `_PIP_ADDITIONAL_REQUIREMENTS`                  | `${...:-docker==7.1.0}`                                    | Defaults to the `docker` SDK so DAG tasks can drive sibling containers. If you set this in `.env`, keep `docker` in the list — the DAGs import it. |
 
 Bind mounts (every Airflow container):
 
@@ -46,7 +46,8 @@ Bind mounts (every Airflow container):
 | `./airflow/dags`    | `/opt/airflow/dags`   | DAG source — auto-discovered by the scheduler                 |
 | `./airflow/logs`    | `/opt/airflow/logs`   | Task logs (gitignored)                                        |
 | `./airflow/plugins` | `/opt/airflow/plugins`| Custom operators, sensors, hooks                              |
-| `./jobs`            | `/opt/jobs:ro`        | Spark job source, read-only — DAGs `spark-submit` against the spark-master container |
+| `./jobs`            | `/opt/jobs:ro`        | Spark job source, read-only                                   |
+| `/var/run/docker.sock` | `/var/run/docker.sock` | Lets DAG tasks drive sibling containers (`spark-master`, `pinot-controller`, `kafka`) via the docker SDK — see [`docs/steps/step11.md`](../steps/step11.md) |
 
 `user: "50000:0"` runs all Airflow processes as UID 50000 (the
 default Airflow image user) with GID 0, which avoids permission
@@ -99,6 +100,13 @@ probe: it triggers `smoke_dag` and waits for `success`.
   container. The scheduler forks subprocesses for tasks, capped by
   `AIRFLOW__CORE__PARALLELISM`. Fine at this data scale; revisit
   only if task parallelism actually becomes a bottleneck.
+- **DAGs drive sibling containers over the Docker socket.** The
+  Airflow image has neither Spark nor a Docker CLI, so the DAGs use
+  the mounted `/var/run/docker.sock` + the `docker` Python SDK to
+  `exec_run` `spark-submit` in `spark-master`, the Pinot ingestion in
+  `pinot-controller`, etc. (helper: `airflow/dags/finpulse_lib.py`).
+  This is the standard sibling-container pattern; the alternative
+  (installing Spark into the Airflow image) is much heavier.
 - **Init/webserver split.** The official Airflow compose example
   uses the same pattern. The init container runs `db migrate` and
   `create-admin` exactly once; the long-lived web/scheduler depend

@@ -208,10 +208,11 @@ shape seen offline in Step 6.
 docker compose exec flink-jobmanager /opt/flink/bin/flink list
 docker compose exec flink-jobmanager /opt/flink/bin/flink cancel <jobid>
 
-# Savepoint + resume (exactly-once across an upgrade).
-docker compose exec flink-jobmanager /opt/flink/bin/flink stop --savepoint /opt/flink/data/savepoints <jobid>
-docker compose exec flink-jobmanager /opt/flink/bin/sql-client.sh \
-    -Dexecution.savepoint.path=<savepoint-path> -f /opt/flink/usrlib/stream_score.sql
+# Savepoint + resume (exactly-once across an upgrade). Take a savepoint,
+# then prepend `SET 'execution.savepoint.path' = '<dir>';` to the SQL
+# script (or pass it via an -i init file) before re-running sql-client.
+docker compose exec flink-jobmanager /opt/flink/bin/flink stop \
+    --savepoint /opt/flink/data/savepoints <jobid>
 ```
 
 ## Troubleshooting

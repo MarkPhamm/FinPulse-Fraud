@@ -69,8 +69,10 @@ read that diagram before starting any step.
   `/opt/jobs/<subdir>/<file>.py`.
 - Flink streaming jobs run via `docker compose exec flink-jobmanager
   flink run -d /opt/flink/usrlib/<artifact>` with `./src/consumer/`
-  bind-mounted at `/opt/flink/usrlib`. The Kafka connector ships with
-  the Flink image — no `--packages` needed.
+  bind-mounted at `/opt/flink/usrlib`. The Kafka connector is **not**
+  bundled in the base image — `make flink-deps` fetches
+  `flink-sql-connector-kafka` into `/opt/flink/lib` (see
+  [`docs/steps/step7.md`](../steps/step7.md)).
 - Pinot tables are registered via `POST /schemas` and `POST /tables`
   against `http://pinot-controller:9000` (or host port 9100). Schema +
   tableconfig JSONs land under `utils/pinot/`.
@@ -719,13 +721,16 @@ ODSC talk, applied at our toy scale.
 - `utils/pinot/load_tables.sh` — registers the schema and both
   table-configs against the controller (`POST /schemas`,
   `POST /tables`).
-- `jobs/build_pinot_offline_segments.py` — nightly Spark job that
-  reads `/analytics/transactions_enriched/` plus the late-event side
-  output from Step 7, generates Pinot segment files via the Pinot
-  Spark plugin (or the controller's `/segments` upload endpoint),
-  and uploads them to the offline table.
-- Wire `build_pinot_offline_segments.py` into the Airflow daily DAG
-  in Step 11 as the last task after `run_offline_scoring`.
+- A nightly Spark + Pinot path that builds offline segments from the
+  scored output and uploads them to the offline table.
+  > **As implemented** (see [`docs/steps/step8.md`](../steps/step8.md)):
+  > `jobs/score/export_pinot_offline.py` exports `/analytics/scored/` to
+  > a shared local Parquet dir, then Pinot's **standalone batch
+  > ingestion** (`utils/pinot/offline_ingestion_job.yaml`) builds and
+  > pushes the segments — the base Pinot image has no HDFS plugin, so the
+  > Spark-plugin route in the original plan was swapped for this.
+- Wire the offline export + ingestion into the Airflow daily DAG in
+  Step 11 as the publish step after `run_offline_scoring`.
 
 **Verify.**
 

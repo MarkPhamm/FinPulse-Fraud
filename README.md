@@ -109,19 +109,19 @@ component. End-to-end data flow is in
 ```text
 docker-compose.yml   # HDFS + Spark + Kafka + Airflow + Pinot + Superset + Flink + HMS + PrestoDB
 Makefile             # up / down / logs / smoke / nuke
-plan.md              # End-to-end build plan, 10 small steps
+docs/plans/plan.md   # End-to-end build plan, 12 steps (runbooks in docs/steps/)
 .env.example         # Optional pip add-ons for Airflow
 
 airflow/             # DAGs, plugins, task logs
 data/                # Source datasets (gzipped CSV / JSON)
 docker/              # Bind-mounted config for Hadoop, Spark, Superset, Flink, HMS, Presto
 docs/                # scenario.md (brief), infrastructure/ (per-container ref), plans/ (dataflow + plan)
-jobs/                # Spark jobs (batch curate / enrich on HDFS Parquet)
-notebooks/           # Analysis notebooks answering the 7 business questions
+jobs/                # Spark batch jobs (curate / enrich / features / score / warehouse-register)
+notebooks/           # Analysis notebook answering the 7 business questions
 scripts/             # Host-side helpers (smoke.sh, generate_data.py)
-src/producer/        # Kafka producers (replays transactions.csv.gz to Kafka)
-src/consumer/        # Non-Spark stream consumers (e.g., Flink fraud-scoring app)
-utils/               # Standalone CLI utilities (Pinot schema loaders, ad-hoc Kafka inspectors, one-off data fixers)
+src/producer/        # Kafka producer (replays transactions.csv.gz to Kafka)
+src/consumer/        # Flink streaming job (stream_score.sql)
+utils/               # Standalone utilities (Pinot schema + table configs + ingestion spec)
 ```
 
 Per-service reference (image, ports, volumes, configuration, caveats) lives
@@ -146,8 +146,9 @@ component (HDFS, Spark, Kafka, Airflow, Pinot, **PrestoDB**, Superset, Flink).
 | PrestoDB Coordinator| 8086      | 8080            | <http://localhost:8086> SQL + Web UI (moved off 8080 to avoid Spark clash) |
 
 Spark runs as **1 master + 2 workers** (2 cores, 2 GB each) so the
-nightly Airflow DAG can run two batch jobs in parallel (e.g.
-`build_enriched_fact` and `build_pinot_offline_segments`). Streaming
+nightly Airflow DAG can run batch jobs in parallel (e.g. the four
+curate jobs, or the `export_pinot_offline` + `register_hms_tables`
+publish fan-out). Streaming
 runs on Flink (1 jobmanager + 1 taskmanager, 4 task slots). HDFS runs
 as **1 NameNode + 2 DataNodes** so replication > 1 is actually exercised.
 
@@ -181,8 +182,9 @@ Superset connects to both. See
 ```sh
 make env                # one-time: copy .env.example -> .env
 make hive-deps          # one-time: download Postgres JDBC driver (~1.2 MB) for HMS
+make flink-deps         # one-time: download the Flink SQL Kafka connector (~5 MB)
 docker compose pull     # ~6 GB of images, one-time
-make up                 # ~60-90s until everything is healthy
+make up                 # ~60-90s until healthy (also runs hive-deps + flink-deps)
 make smoke              # every smoke check (HDFS / Kafka / Spark / Airflow / Pinot / Flink / Presto)
 ```
 
@@ -190,11 +192,13 @@ make smoke              # every smoke check (HDFS / Kafka / Spark / Airflow / Pi
 
 | Target                   | What it does                                                                 |
 |--------------------------|------------------------------------------------------------------------------|
-| `make up`                | Start the full stack                                                         |
+| `make up`                | Start the full stack (also runs `hive-deps` + `flink-deps`)                  |
 | `make up-core`           | HDFS + Spark + Kafka only (skip Airflow)                                     |
+| `make up-stream`         | Kafka + Flink only (for streaming-job work)                                  |
 | `make up-bi`             | Pinot + Superset + HMS + Presto (skip everything else)                       |
 | `make up-dwh`            | Just the HMS stack (Postgres + hive-metastore-init + hive-metastore)         |
 | `make hive-deps`         | One-time: download Postgres JDBC driver to `docker/hive-metastore/jars/`     |
+| `make flink-deps`        | One-time: download the Flink SQL Kafka connector to `docker/flink/lib/`      |
 | `make down`              | Stop containers, keep volumes                                                |
 | `make nuke`              | Stop **and delete** all volumes (HDFS / Kafka / Postgres / HMS / Pinot / …)  |
 | `make ps`                | Show running services                                                        |
@@ -228,8 +232,10 @@ To regenerate the dataset from scratch (seed `2041`, deterministic):
    transaction facts — see `docs/plans/dataflow.md`) need
    `--packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1` on
    `spark-submit`. First run downloads the JAR; bake into a custom image
-   later if startup time matters. Flink ships its own Kafka connector
-   bundled into the image.
+   later if startup time matters. Flink's Kafka connector is **also not**
+   bundled — `make flink-deps` fetches `flink-sql-connector-kafka` into
+   `docker/flink/lib/` (mounted into `/opt/flink/lib`), same fetch-on-demand
+   posture as `make hive-deps`.
 2. **`data/*.gz` is not gitignored** but `transactions.csv.gz` (24 MB) is past
    GitHub's recommended file size. Decide whether to commit it or rely on
    `scripts/generate_data.py` / re-download.

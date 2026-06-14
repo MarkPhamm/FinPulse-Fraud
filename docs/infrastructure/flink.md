@@ -63,8 +63,20 @@ Bind mounts (both containers):
 | Host path           | Container path        | Purpose                                                       |
 |---------------------|-----------------------|---------------------------------------------------------------|
 | `flink-data` volume | `/opt/flink/data`     | Checkpoints + savepoints (must be shared between JM and TM)   |
-| `./src/consumer`    | `/opt/flink/usrlib:ro`| Job artifacts — `flink run -d /opt/flink/usrlib/<job>.{jar,py}` |
-| `./docker/hadoop-client` | `/opt/hadoop-conf:ro` | HDFS client config so the broadcast-state reader can fetch `/analytics/customer_features` |
+| `./src/consumer`    | `/opt/flink/usrlib:ro`| Job artifacts — `flink run -d /opt/flink/usrlib/<job>` or `sql-client.sh -f` |
+| `./docker/flink/lib/flink-sql-connector-kafka-*.jar` | `/opt/flink/lib/flink-sql-connector-kafka.jar:ro` | Kafka SQL connector (not bundled; fetched by `make flink-deps`) |
+| `./docker/hadoop-client` | `/opt/hadoop-conf:ro` | HDFS client config (reserved for HDFS-reading jobs)        |
+
+> **Implementation note (Step 7).** The shipped streaming job
+> (`src/consumer/stream_score.sql`) is **Flink SQL**, and it serves the
+> customer + merchant dimensions from **compacted Kafka topics**
+> (`customer-features`, `merchant-directory`) consumed as `upsert-kafka`
+> versioned tables — a lightweight stand-in for HDFS broadcast state at
+> this scale. So the broadcast-state discussion below is the design
+> rationale; the actual wiring is Kafka-in / Kafka-out. The
+> `flink-data` volume is also chowned to the `flink` user by a root
+> entrypoint so checkpoints can be created. See
+> [`docs/steps/step7.md`](../steps/step7.md).
 
 ## Volumes
 
@@ -131,15 +143,19 @@ ramp-up.
   metadata; the TM writes the actual operator state files. They
   must agree on the path or restore-from-checkpoint silently
   fails.
-- **`HADOOP_CONF_DIR`-equivalent via bind mount.** Flink reads HDFS
-  via the Hadoop client config at `/opt/hadoop-conf`, same pattern
-  as Spark. The streaming job's bootstrap (broadcast-load
-  `/analytics/customer_features`) needs this; without it, Flink
-  defaults to `file:///` and the bootstrap silently sees an empty
-  feature store.
-- **Kafka connector is bundled.** Unlike Spark, Flink ships its
-  Kafka connector inside the image. No `--packages` equivalent
-  needed at submit time.
+- **`HADOOP_CONF_DIR`-equivalent via bind mount.** The Hadoop client
+  config at `/opt/hadoop-conf` is mounted so any future HDFS-reading
+  job picks up `hdfs://namenode:9000` instead of `file:///`. The
+  shipped Step 7 SQL job does not read HDFS (it sources dimensions from
+  Kafka), so this mount is currently unused by it — it is kept for the
+  broadcast-from-HDFS variant described below.
+- **Kafka connector is NOT bundled.** The base `flink:1.19` image ships
+  only the files connector in `/opt/flink/lib`. `make flink-deps`
+  downloads `flink-sql-connector-kafka-3.2.0-1.19.jar` into
+  `docker/flink/lib/` (gitignored, same fetch-on-demand posture as
+  `make hive-deps`), and compose overlays it into `/opt/flink/lib/` on
+  both Flink containers so the SQL client / job classpath can see it.
+  See [`docs/steps/step7.md`](../steps/step7.md).
 
 ## Why we join inside Flink (vs. denormalize upstream)
 

@@ -136,7 +136,12 @@ Flink is the **broadcast-state bridge** — a one-time read at job
 startup (refreshed each night when the Airflow batch DAG rebuilds
 the feature store); Flink holds those ~100K rows in operator state
 on every task manager so every event can be enriched without a
-network hop. The arrow from Spark's `/analytics/*` outputs into HMS
+network hop. (Implementation note: the shipped Step 7 Flink SQL job
+realises this bridge by publishing `customer_features` — and merchant
+risk — to **compacted Kafka topics** consumed as `upsert-kafka`
+versioned tables, rather than reading HDFS broadcast state directly;
+same effect, simpler wiring. See [`docs/steps/step7.md`](../steps/step7.md).)
+The arrow from Spark's `/analytics/*` outputs into HMS
 is the **catalog bridge** — `saveAsTable` registers the table once
 per write, after which Presto and Superset can find it by name
 instead of HDFS path.

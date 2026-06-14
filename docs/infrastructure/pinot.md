@@ -199,8 +199,10 @@ Per [`docs/plans/dataflow.md`](../plans/dataflow.md), the
   `timeBoundary` set on the table config.
 
 Schemas and table configs live under
-[`utils/pinot/`](../../utils/pinot/) (planned per the plan; today
-that directory is empty — populated when Step 9 lands).
+[`utils/pinot/`](../../utils/pinot/): the `transactions_scored` schema,
+the real-time and offline table configs, the `load_tables.sh` loader, and
+the standalone offline-ingestion job spec — all added in Step 8 (see
+[`docs/steps/step8.md`](../steps/step8.md)).
 
 ## Common commands
 
