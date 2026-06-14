@@ -1,0 +1,47 @@
+# Pinot standalone batch ingestion: build OFFLINE segments for
+# transactions_scored from the Spark-exported scored Parquet and push them
+# to the controller. The scored Parquet is produced by
+# jobs/score/export_pinot_offline.py into the ./pinot-offline host dir,
+# which is bind-mounted into the pinot-controller at /opt/pinot-offline.
+#
+# Run inside the controller container:
+#   docker compose exec pinot-controller bin/pinot-admin.sh \
+#       LaunchDataIngestionJob -jobSpecFile /opt/pinot-offline/offline_ingestion_job.yaml
+executionFrameworkSpec:
+  name: 'standalone'
+  segmentGenerationJobRunnerClassName: org.apache.pinot.plugin.ingestion.batch.standalone.SegmentGenerationJobRunner
+  segmentTarPushJobRunnerClassName: org.apache.pinot.plugin.ingestion.batch.standalone.SegmentTarPushJobRunner
+
+jobType: SegmentCreationAndTarPush
+
+inputDirURI: 'file:///opt/pinot-offline/scored'
+includeFileNamePattern: 'glob:**/*.parquet'
+outputDirURI: 'file:///tmp/pinot_scored_segments'
+overwriteOutput: true
+
+pinotFSSpecs:
+  - scheme: file
+    className: org.apache.pinot.spi.filesystem.LocalPinotFS
+
+recordReaderSpec:
+  dataFormat: 'parquet'
+  className: 'org.apache.pinot.plugin.inputformat.parquet.ParquetRecordReader'
+
+tableSpec:
+  tableName: 'transactions_scored'
+  schemaURI: 'http://pinot-controller:9000/tables/transactions_scored/schema'
+  tableConfigURI: 'http://pinot-controller:9000/tables/transactions_scored'
+
+pushJobSpec:
+  pushParallelism: 1
+  pushAttempts: 2
+  pushRetryIntervalMillis: 1000
+
+pinotClusterSpecs:
+  - controllerURI: 'http://pinot-controller:9000'
+
+segmentNameGeneratorSpec:
+  type: 'normalizedDate'
+  configs:
+    segment.name.prefix: 'transactions_scored_offline'
+    exclude.sequence.id: 'false'

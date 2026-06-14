@@ -164,6 +164,7 @@ services:
       - ./docker/hadoop-client:/opt/hadoop-conf:ro
       - ./docker/spark/log4j2.properties:/opt/spark/conf/log4j2.properties:ro
       - ./docker/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
+      - ./pinot-offline:/opt/pinot-offline   # Step 8: scored Parquet handoff to Pinot offline ingestion
     networks: [finpulse]
 
   spark-worker-1:
@@ -190,6 +191,7 @@ services:
       - ./docker/hadoop-client:/opt/hadoop-conf:ro
       - ./docker/spark/log4j2.properties:/opt/spark/conf/log4j2.properties:ro
       - ./docker/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
+      - ./pinot-offline:/opt/pinot-offline   # Step 8: scored Parquet handoff to Pinot offline ingestion
     networks: [finpulse]
 
   spark-worker-2:
@@ -216,6 +218,7 @@ services:
       - ./docker/hadoop-client:/opt/hadoop-conf:ro
       - ./docker/spark/log4j2.properties:/opt/spark/conf/log4j2.properties:ro
       - ./docker/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
+      - ./pinot-offline:/opt/pinot-offline   # Step 8: scored Parquet handoff to Pinot offline ingestion
     networks: [finpulse]
 
   # ---------- Kafka ---------------------------------------------------------
@@ -389,6 +392,7 @@ services:
       - "9100:9000"
     volumes:
       - pinot-controller-data:/var/pinot/controller/data
+      - ./pinot-offline:/opt/pinot-offline:ro   # Step 8: read Spark-exported scored Parquet for offline ingestion
     depends_on:
       pinot-zookeeper:
         condition: service_healthy

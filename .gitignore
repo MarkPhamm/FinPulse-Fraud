@@ -235,6 +235,9 @@ docker/hive-metastore/jars/*.jar
 # Track the directory + .gitkeep, exclude the .jar.
 docker/flink/lib/*.jar
 
+# Step 8: Spark-exported scored Parquet handed off to Pinot offline ingestion.
+pinot-offline/
+
 # ---- Editor / OS ----
 .DS_Store
 .idea/

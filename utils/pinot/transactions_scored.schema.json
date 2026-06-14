@@ -1,0 +1,31 @@
+{
+  "schemaName": "transactions_scored",
+  "dimensionFieldSpecs": [
+    { "name": "txn_id", "dataType": "STRING" },
+    { "name": "card_id", "dataType": "STRING" },
+    { "name": "merchant_id", "dataType": "STRING" },
+    { "name": "country", "dataType": "STRING" },
+    { "name": "channel", "dataType": "STRING" },
+    { "name": "recommended_action", "dataType": "STRING" },
+    { "name": "is_international", "dataType": "BOOLEAN" },
+    { "name": "predicted_fraud", "dataType": "BOOLEAN" },
+    { "name": "rule_high_amount", "dataType": "BOOLEAN" },
+    { "name": "rule_velocity", "dataType": "BOOLEAN" },
+    { "name": "rule_intl_mismatch", "dataType": "BOOLEAN" },
+    { "name": "rule_high_risk_merchant", "dataType": "BOOLEAN" }
+  ],
+  "metricFieldSpecs": [
+    { "name": "amount", "dataType": "DOUBLE" },
+    { "name": "risk_score", "dataType": "INT" },
+    { "name": "merchant_risk_score", "dataType": "INT" },
+    { "name": "velocity_count", "dataType": "LONG" }
+  ],
+  "dateTimeFieldSpecs": [
+    {
+      "name": "event_time",
+      "dataType": "STRING",
+      "format": "1:SECONDS:SIMPLE_DATE_FORMAT:yyyy-MM-dd HH:mm:ss",
+      "granularity": "1:SECONDS"
+    }
+  ]
+}
