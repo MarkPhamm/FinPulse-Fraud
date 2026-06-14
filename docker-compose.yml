@@ -48,12 +48,16 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
     AIRFLOW__WEBSERVER__SECRET_KEY: dev-secret-key-change-me
     AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
-    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
+    # The DAGs (Step 11) drive sibling containers (spark-master, namenode,
+    # pinot-controller) over the mounted Docker socket via the docker SDK —
+    # the LocalExecutor has neither Spark nor the docker CLI otherwise.
+    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-docker==7.1.0}
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/logs:/opt/airflow/logs
     - ./airflow/plugins:/opt/airflow/plugins
     - ./jobs:/opt/jobs:ro
+    - /var/run/docker.sock:/var/run/docker.sock   # Step 11: orchestrate sibling containers
   user: "50000:0"
   networks: [finpulse]
 
@@ -393,6 +397,7 @@ services:
     volumes:
       - pinot-controller-data:/var/pinot/controller/data
       - ./pinot-offline:/opt/pinot-offline:ro   # Step 8: read Spark-exported scored Parquet for offline ingestion
+      - ./utils/pinot:/opt/pinot-spec:ro          # Step 8/11: ingestion job spec + table configs
     depends_on:
       pinot-zookeeper:
         condition: service_healthy
