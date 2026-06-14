@@ -124,7 +124,7 @@ confirmed_fraud, dt
   "go look this up in a dictionary."
 - **LEFT vs INNER join, picked by sparsity.** Not every txn has a
   device fingerprint (sessions can be missing on stored-card
-  rebills), and only ~1.8% of txns ever generate a fraud report.
+  rebills), and only ~1.5% of txns ever generate a fraud report.
   LEFT-joining `devices` and `fraud_reports` keeps every txn in the
   output; INNER-joining them would silently drop most rows. Conversely
   every txn *must* have a card and a merchant — that's a referential
@@ -537,16 +537,16 @@ Commit as `step 4c: label confirmed_fraud and write /analytics/transactions_enri
 
 One small job that reads `/analytics/transactions_enriched/` and
 prints the global fraud rate. This is the rubric check that ties off
-the step — if it prints something between 1.5% and 2.5%, the joins
-landed correctly. Below that means the LEFT joins are dropping rows;
-above means the label is mis-firing.
+the step — for the generated seed data, expect roughly 1.25% to 1.35%.
+Much below that means the fraud-reports LEFT join is not matching;
+much above that means the label is mis-firing.
 
 `jobs/enrich/check_fraud_rate.py`:
 
 ```python
 """Print the global confirmed_fraud rate from /analytics/transactions_enriched/.
 
-Step 4 rubric check — expects ~0.018 (≈1.8%, ≈18K confirmed rows out of ~1M).
+Step 4 rubric check - expects ~0.0127 on the generated seed data.
 Submit:
     docker compose exec spark-master /opt/spark/bin/spark-submit \\
         --master spark://spark-master:7077 \\
@@ -587,13 +587,13 @@ docker compose exec spark-master /opt/spark/bin/spark-submit \
     /opt/jobs/enrich/check_fraud_rate.py
 ```
 
-Expected output (numbers will vary by ±5%):
+Expected output on a single replay of the generated dataset:
 
 ```text
 +-------+-----------+--------------------+
 |total  |fraud_rows |fraud_rate          |
 +-------+-----------+--------------------+
-|1000000|18234      |0.018234            |
+|1000000|12671      |0.012671            |
 +-------+-----------+--------------------+
 ```
 
@@ -628,7 +628,7 @@ PY
 docker compose exec spark-master /opt/spark/bin/spark-submit \
     --master spark://spark-master:7077 \
     /opt/jobs/enrich/check_fraud_rate.py
-# expect: fraud_rate between 0.015 and 0.025.
+# expect: fraud_rate around 0.0127 on the generated seed data.
 
 # 4. Per the dataflow SoT, transactions still must NOT be in /landing
 #    or /curated — Kafka stays the only source of truth for the fact.
@@ -651,7 +651,7 @@ $ spark-submit ... check_fraud_rate.py
 +-------+-----------+----------+
 |total  |fraud_rows |fraud_rate|
 +-------+-----------+----------+
-|1000000|18234      |0.018234  |
+|1000000|12671      |0.012671  |
 +-------+-----------+----------+
 
 $ hdfs dfs -ls /curated | grep -i transactions
@@ -714,7 +714,7 @@ OK: no /curated/transactions/
 Step 5 reads `/analytics/transactions_enriched/` and computes
 per-`card_id` behavioural baselines — average amount, transaction
 count, typical merchants, typical countries — and writes
-`/analytics/customer_baselines/`. This is the feature store that
+`/analytics/customer_features/`. This is the feature store that
 Step 6 (rules + simple ML) and Step 7 (Flink scoring) both consume.
 
 Don't start Step 5 until every check in **Verification** above passes

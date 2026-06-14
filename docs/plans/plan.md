@@ -445,11 +445,11 @@ consumers saw.
 **Verify.**
 
 ```sh
-# fraud rate across the whole dataset should be ~1.5–2.5%
+# fraud rate across the generated seed dataset should be ~1.27%
 docker compose exec spark-master /opt/spark/bin/spark-submit \
-  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1 \
-  jobs/check_fraud_rate.py
-# Should print:  fraud_rate ≈ 0.018  (≈ 18,000 confirmed fraud rows)
+  --master spark://spark-master:7077 \
+  /opt/jobs/enrich/check_fraud_rate.py
+# Should print:  fraud_rate ≈ 0.0127  (12,671 confirmed rows out of 1M)
 ```
 
 ---
